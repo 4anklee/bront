@@ -57,7 +57,8 @@ and recovery scenarios against mocks with Toxiproxy and uploads a JSON report.
 See [benchmark instructions](../README.md#benchmark-failover-and-recovery).
 
 The [local Kubernetes deployment](kubernetes.md) adds Deployments, Services,
-configuration, resource budgets, and health probes, with one gateway replica.
+configuration, resource budgets, and health probes, with two gateway replicas.
+Each replica has independent circuit state and metrics.
 
 1. Validate rolling updates and multiple gateway replicas under sustained traffic,
    accounting for independent circuit state and per-process metrics.

@@ -1,6 +1,6 @@
 # Local Kubernetes with Triton
 
-This deployment runs one gateway, one CPU Triton server, and one mock fallback
+This deployment runs two gateway replicas, one CPU Triton server, and one mock fallback
 in the `inference-guard` namespace. All three have ClusterIP Services, CPU/memory
 requests and limits, and startup, liveness, and readiness probes. Gateway
 configuration is generated from `deploy/kubernetes/kustomization.yaml`.
@@ -108,9 +108,11 @@ traffic-driven circuit recovery. If both backends fail, inference returns 503
 while the gateway stays ready. Readiness is not a guarantee of inference success.
 See [Kubernetes probe semantics](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/).
 
-Keep one gateway replica and one process per pod initially. Circuit state and
-metrics are local to each process; additional replicas would observe backend
-health independently.
+Each gateway pod runs one process. Circuit state and metrics are local to each
+process, so the two replicas observe backend health and recover independently.
+`/status` describes only the pod that handles the request; it is not a combined
+view of both replicas. The gateway Service routes to both ready pods, while a
+port-forward selects just one pod.
 
 Kustomize packages the existing tiny ONNX model and configuration into a ConfigMap
 mounted under `/models/double`. Generated names include content hashes, so config

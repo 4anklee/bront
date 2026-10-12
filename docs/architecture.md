@@ -1,5 +1,28 @@
 # Architecture and next steps
 
+The [topology diagram](../README.md) shows the current Kubernetes deployment:
+a Service selects either gateway pod, each with its own breakers and counters.
+The Triton and fallback Services route to single backend pods. Prometheus discovers
+gateway pod IPs directly; Grafana queries the provisioned Prometheus datasource.
+The in-cluster benchmark uses the gateway Service so new connections can reach
+either replica. HTTP keep-alive connections remain attached to a selected pod.
+
+The Compose demo instead has one gateway and a Toxiproxy hop on its primary route:
+
+```mermaid
+flowchart LR
+    CLI[CLI and recorded traffic] --> Gateway
+    Gateway --> Proxy[Toxiproxy primary route]
+    Proxy --> Triton[Triton · ONNX CPU]
+    Gateway --> Fallback[Compatible Python fallback]
+    Controls[CLI fault outage / delay / reset] -. control API .-> Proxy
+    Status[CLI direct inference checks] -. bypass proxy .-> Triton & Fallback
+```
+
+[The recording](demo/README.md) demonstrates proxy failure, not a stopped Triton
+process. The [Kubernetes experiment](experiments/rolling-updates.md) separately
+scales Triton to zero while replacing both gateway pods under traffic.
+
 ## Current behavior
 
 The gateway owns one pooled asynchronous HTTP client for its process lifetime,

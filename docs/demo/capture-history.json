@@ -1,0 +1,109 @@
+[
+  {
+    "capture": 1,
+    "published_video": false,
+    "started_at": "2026-10-12T23:27:10.465158+00:00",
+    "description": "Initial shared-client capture",
+    "measurement": {
+      "scenario": "recovery",
+      "requests": 2064,
+      "successful": 2063,
+      "failed": 1,
+      "success_rate": 0.999515503875969,
+      "primary_requests": 1369,
+      "fallback_requests": 694,
+      "elapsed_seconds": 60.0267640829552,
+      "attempted_rps": 34.38466210085244,
+      "successful_rps": 34.36800286533846,
+      "latency_ms": {
+        "p50": 13.448957935906947,
+        "p95": 23.576791980303824,
+        "p99": 28.413041960448027,
+        "mean": 14.113038811526286,
+        "max": 38.02537498995662
+      },
+      "errors": {
+        "transport_error": 1
+      },
+      "expectations_met": false,
+      "recovery_seconds": null,
+      "recovery_probes": []
+    },
+    "passed": false,
+    "recovery_seconds_after_reset_ack": 0.16568612505216151,
+    "failed_samples": [
+      {
+        "index": 866,
+        "started_ms": 25000.643167062663,
+        "duration_ms": 13.16316588781774,
+        "status_code": null,
+        "backend": null,
+        "error": "transport_error"
+      }
+    ]
+  },
+  {
+    "capture": 2,
+    "published_video": false,
+    "started_at": "2026-10-12T23:28:24.599679+00:00",
+    "description": "Repeat with wider, colored terminal rendering",
+    "measurement": {
+      "scenario": "recovery",
+      "requests": 2072,
+      "successful": 2072,
+      "failed": 0,
+      "success_rate": 1.0,
+      "primary_requests": 1377,
+      "fallback_requests": 695,
+      "elapsed_seconds": 60.093125459039584,
+      "attempted_rps": 34.4798175194317,
+      "successful_rps": 34.4798175194317,
+      "latency_ms": {
+        "p50": 12.841125018894672,
+        "p95": 24.440540932118893,
+        "p99": 27.717666001990438,
+        "mean": 13.994730022847365,
+        "max": 33.518708078190684
+      },
+      "errors": {},
+      "expectations_met": true,
+      "recovery_seconds": null,
+      "recovery_probes": []
+    },
+    "passed": true,
+    "recovery_seconds_after_reset_ack": 0.09064900001976639,
+    "failed_samples": []
+  },
+  {
+    "capture": 3,
+    "published_video": true,
+    "started_at": "2026-10-12T23:29:48.861355+00:00",
+    "description": "Separate status/traffic pools; two-second traffic keep-alive expiry; detailed transport diagnostics",
+    "measurement": {
+      "scenario": "recovery",
+      "requests": 2076,
+      "successful": 2076,
+      "failed": 0,
+      "success_rate": 1.0,
+      "primary_requests": 1381,
+      "fallback_requests": 695,
+      "elapsed_seconds": 60.03936499997508,
+      "attempted_rps": 34.57731440032488,
+      "successful_rps": 34.57731440032488,
+      "latency_ms": {
+        "p50": 12.704167049378157,
+        "p95": 23.59979203902185,
+        "p99": 27.11058291606605,
+        "mean": 13.70573391807481,
+        "max": 76.55112503562123
+      },
+      "errors": {},
+      "expectations_met": true,
+      "recovery_seconds": null,
+      "recovery_probes": []
+    },
+    "passed": true,
+    "recovery_seconds_after_reset_ack": 0.06312229204922915,
+    "failed_samples": []
+  }
+]

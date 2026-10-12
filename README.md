@@ -16,11 +16,28 @@ fallback usage, latency, circuit state, and recovery across individual gateway p
 
 ```mermaid
 flowchart LR
-    Client --> Gateway[FastAPI gateway :8000]
-    Gateway --> Primary[Primary mock :8001]
-    Gateway --> Fallback[Fallback mock :8002]
-    Prometheus -->|scrape /metrics| Gateway
+    Client --> S[Gateway Service :8000]
+    subgraph Kubernetes[Local Kubernetes · inference-guard namespace]
+        Job[Benchmark Job] --> S
+        S --> G1[Gateway pod 1 · own breakers]
+        S --> G2[Gateway pod 2 · own breakers]
+        G1 & G2 --> TS[Triton Service]
+        G1 & G2 --> FS[Fallback Service]
+        TS --> T[Triton · ONNX double · CPU]
+        FS --> F[Python fallback · same contract]
+        P[Prometheus] -. scrape each pod .-> G1 & G2
+        D[Grafana dashboard] --> P
+    end
 ```
+
+## Watch and reproduce
+
+[![60-second outage and recovery demonstration](docs/demo/poster.png)](docs/demo/inferenceguard.mp4)
+
+[Watch the video and reproduce it](docs/demo/README.md). The recording uses the
+Compose fault proxy; the diagram above shows the Kubernetes deployment.
+The [curated rolling-update experiment](docs/experiments/rolling-updates.md)
+records the command, hardware, configuration, and results for two gateway replicas.
 
 ## Run locally
 

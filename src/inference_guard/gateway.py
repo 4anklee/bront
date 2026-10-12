@@ -1,0 +1,54 @@
+from contextlib import asynccontextmanager
+
+import httpx
+from fastapi import FastAPI, HTTPException, Request, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+from inference_guard.backends import BackendRouter, BackendsUnavailable
+from inference_guard.config import Settings
+from inference_guard.metrics import Metrics
+from inference_guard.schemas import InferenceRequest, InferenceResponse
+
+
+def create_app(
+    settings: Settings | None = None,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> FastAPI:
+    settings = settings or Settings()
+    metrics = Metrics()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        async with httpx.AsyncClient(
+            timeout=settings.request_timeout_seconds, transport=transport, trust_env=False
+        ) as client:
+            app.state.router = BackendRouter(client, settings, metrics)
+            yield
+
+    app = FastAPI(title="InferenceGuard", version="0.1.0", lifespan=lifespan)
+
+    @app.get("/healthz")
+    async def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.get("/status")
+    async def status(request: Request) -> dict:
+        return {"backends": request.app.state.router.status()}
+
+    @app.post("/v1/infer", response_model=InferenceResponse)
+    async def infer(payload: InferenceRequest, request: Request) -> InferenceResponse:
+        try:
+            return await request.app.state.router.infer(payload)
+        except BackendsUnavailable as exc:
+            raise HTTPException(status_code=503, detail="No inference backend available") from exc
+
+    @app.get("/metrics", include_in_schema=False)
+    async def prometheus_metrics() -> Response:
+        return Response(
+            generate_latest(metrics.registry), headers={"Content-Type": CONTENT_TYPE_LATEST}
+        )
+
+    return app
+
+
+app = create_app()

@@ -1,0 +1,11 @@
+name: "double"
+backend: "onnxruntime"
+max_batch_size: 0
+input [
+  { name: "INPUT" data_type: TYPE_FP64 dims: [ -1 ] }
+]
+output [
+  { name: "OUTPUT" data_type: TYPE_FP64 dims: [ -1 ] }
+]
+instance_group [ { kind: KIND_CPU count: 1 } ]
+version_policy: { specific: { versions: [ 1 ] } }

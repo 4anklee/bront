@@ -3,9 +3,12 @@
 A Python/FastAPI starter for an inference gateway that routes requests to a
 compatible fallback when a backend fails or times out.
 
-The current workload is **two mock services**, each doubling a list of numbers.
-This exercises reliability without a GPU. Triton, real models, latency-aware
-routing, Kubernetes deployment, and a benchmark CLI are future work.
+The default workload is **two mock services**, each doubling a list of numbers.
+An alternative stack runs **NVIDIA Triton with an ONNX model on CPU** as primary,
+preserving the same inputs and outputs through the mock fallback. Follow the
+[Triton walkthrough](docs/triton.md) to run it and verify outage recovery.
+Trained AI models, latency-aware routing, Kubernetes, and a benchmark CLI remain
+future work.
 
 ```mermaid
 flowchart LR
@@ -119,6 +122,7 @@ its own values in `compose.yaml`.
 | --- | --- |
 | `IG_PRIMARY_URL` | `http://127.0.0.1:8001` |
 | `IG_FALLBACK_URL` | `http://127.0.0.1:8002` |
+| `IG_PRIMARY_PROTOCOL` | `mock` (`triton` in `compose.triton.yaml`) |
 | `IG_REQUEST_TIMEOUT_SECONDS` | `1` per backend attempt |
 | `IG_FAILURE_THRESHOLD` | `3` consecutive failures |
 | `IG_RECOVERY_TIMEOUT_SECONDS` | `10` |
@@ -129,6 +133,7 @@ its own values in `compose.yaml`.
 src/inference_guard/
   gateway.py          FastAPI routes and shared HTTP client lifecycle
   backends.py         Ordered backend routing and response validation
+  adapters.py         Mock and Triton HTTP protocol translation
   circuit_breaker.py  Closed/open/half-open state machine
   config.py           Validated environment settings
   metrics.py          Per-app Prometheus registry

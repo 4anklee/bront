@@ -1,0 +1,36 @@
+# Standalone alternative to compose.yaml: docker compose -f compose.triton.yaml up
+services:
+    gateway:
+        extends:
+            file: compose.yaml
+            service: gateway
+        environment:
+            IG_PRIMARY_PROTOCOL: triton
+
+    primary:
+        image: nvcr.io/nvidia/tritonserver:26.08-py3
+        init: true
+        command:
+            - tritonserver
+            - --model-repository=/models
+            - --disable-auto-complete-config
+            - --allow-grpc=false
+            - --allow-gpu-metrics=false
+        ports: ["127.0.0.1:${IG_PRIMARY_PORT:-8001}:8000"]
+        volumes:
+            - ./deploy/triton/models:/models:ro
+        healthcheck:
+            test:
+                - CMD
+                - python3
+                - -c
+                - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v2/models/double/versions/1/ready', timeout=2)"
+            interval: 5s
+            timeout: 3s
+            retries: 12
+            start_period: 30s
+
+    fallback:
+        extends:
+            file: compose.yaml
+            service: fallback

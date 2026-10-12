@@ -1,4 +1,7 @@
 import asyncio
+import json
+import struct
+import sys
 from contextlib import asynccontextmanager
 
 import httpx
@@ -172,3 +175,143 @@ async def test_cancelled_recovery_probe_does_not_leave_circuit_half_open():
         assert breaker.state == "open"
         breaker.clock = lambda: 20.0
         assert breaker.acquire() is not None
+
+
+TRITON_RESULT = {
+    "model_name": "double",
+    "model_version": "1",
+    "outputs": [
+        {"name": "OUTPUT", "datatype": "FP64", "shape": [3], "parameters": {"binary_data_size": 24}}
+    ],
+}
+
+
+def triton_response(metadata=None, data=None):
+    header = json.dumps(TRITON_RESULT if metadata is None else metadata).encode()
+    return httpx.Response(
+        200,
+        content=header + (struct.pack("<3d", 2, 4, 6) if data is None else data),
+        headers={"Inference-Header-Content-Length": str(len(header))},
+    )
+
+
+async def test_triton_protocol_preserves_public_contract():
+    def handler(request):
+        assert request.url.path == "/v2/models/double/versions/1/infer"
+        boundary = int(request.headers["Inference-Header-Content-Length"])
+        assert json.loads(request.content[:boundary]) == {
+            "inputs": [
+                {
+                    "name": "INPUT",
+                    "datatype": "FP64",
+                    "shape": [3],
+                    "parameters": {"binary_data_size": 24},
+                }
+            ],
+            "outputs": [{"name": "OUTPUT", "parameters": {"binary_data": True}}],
+        }
+        assert struct.unpack("<3d", request.content[boundary:]) == (1, 2, 3)
+        return triton_response()
+
+    async with gateway(handler, primary_protocol="triton") as (client, _):
+        response = await client.post("/v1/infer", json=PAYLOAD)
+        assert response.status_code == 200
+        assert response.json() == {**RESULT, "backend": "primary"}
+
+
+@pytest.mark.parametrize(
+    "corruption",
+    [
+        "model",
+        "version",
+        "name",
+        "datatype",
+        "shape",
+        "length",
+        "missing",
+        "size",
+        "nonfinite",
+        "header",
+        "extra_bytes",
+    ],
+)
+async def test_incompatible_triton_response_falls_back(corruption):
+    output: dict[str, object] = {
+        "name": "OUTPUT",
+        "datatype": "FP64",
+        "shape": [3],
+        "parameters": {"binary_data_size": 24},
+    }
+    result: dict[str, object] = {"model_name": "double", "model_version": "1", "outputs": [output]}
+    data = struct.pack("<3d", 2, 4, 6)
+    if corruption == "model":
+        result["model_name"] = "wrong-model"
+    elif corruption == "version":
+        result["model_version"] = "2"
+    elif corruption == "name":
+        output["name"] = "WRONG"
+    elif corruption == "datatype":
+        output["datatype"] = "FP32"
+    elif corruption == "shape":
+        output["shape"] = [1, 3]
+    elif corruption == "length":
+        data = data[:-1]
+    elif corruption == "missing":
+        result["outputs"] = []
+    elif corruption == "size":
+        output["parameters"] = {"binary_data_size": 8}
+    elif corruption == "nonfinite":
+        data = struct.pack("<3d", float("inf"), 4, 6)
+    elif corruption == "extra_bytes":
+        data += b"extra"
+
+    def handler(request):
+        if request.url.host == "primary":
+            response = triton_response(result, data)
+            if corruption == "header":
+                response.headers["Inference-Header-Content-Length"] = "not-a-number"
+            return response
+        assert request.url.path == "/infer"
+        assert json.loads(request.content) == PAYLOAD
+        return httpx.Response(200, json=RESULT)
+
+    async with gateway(handler, primary_protocol="triton") as (client, _):
+        response = await client.post("/v1/infer", json=PAYLOAD)
+        assert response.status_code == 200
+        assert response.json() == {**RESULT, "backend": "fallback"}
+
+
+async def test_triton_outage_and_recovery_preserve_results():
+    available = False
+
+    def handler(request):
+        if request.url.host == "primary":
+            if not available:
+                raise httpx.ConnectError("Triton stopped")
+            return triton_response()
+        return httpx.Response(200, json=RESULT)
+
+    async with gateway(handler, primary_protocol="triton", failure_threshold=1) as (client, app):
+        breaker = app.state.router.backends[0].breaker
+        breaker.clock = lambda: 0.0
+        response = await client.post("/v1/infer", json=PAYLOAD)
+        assert response.json() == {**RESULT, "backend": "fallback"}
+        available = True
+        breaker.clock = lambda: 10.0
+        response = await client.post("/v1/infer", json=PAYLOAD)
+        assert response.json() == {**RESULT, "backend": "primary"}
+
+
+async def test_triton_binary_tensors_preserve_numeric_boundaries():
+    values = [5e-324, 1e-310, sys.float_info.max / 2]
+    expected = [x * 2 for x in values]
+
+    def handler(request):
+        boundary = int(request.headers["Inference-Header-Content-Length"])
+        assert list(struct.unpack("<3d", request.content[boundary:])) == values
+        return triton_response(data=struct.pack("<3d", *expected))
+
+    async with gateway(handler, primary_protocol="triton") as (client, _):
+        response = await client.post("/v1/infer", json={"inputs": values})
+        assert response.status_code == 200
+        assert response.json() == {"model": "double", "outputs": expected, "backend": "primary"}

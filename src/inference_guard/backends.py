@@ -6,10 +6,11 @@ from time import monotonic
 import httpx
 from pydantic import ValidationError
 
+from inference_guard.adapters import BackendAdapter, MockAdapter, TritonAdapter
 from inference_guard.circuit_breaker import CircuitBreaker
 from inference_guard.config import Settings
 from inference_guard.metrics import Metrics
-from inference_guard.schemas import BackendResponse, InferenceRequest, InferenceResponse
+from inference_guard.schemas import InferenceRequest, InferenceResponse
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ class Backend:
     name: str
     url: str
     breaker: CircuitBreaker
+    adapter: BackendAdapter
 
 
 class BackendRouter:
@@ -35,6 +37,9 @@ class BackendRouter:
                 name,
                 str(url).rstrip("/"),
                 CircuitBreaker(settings.failure_threshold, settings.recovery_timeout_seconds),
+                TritonAdapter()
+                if name == "primary" and settings.primary_protocol == "triton"
+                else MockAdapter(),
             )
             for name, url in (
                 ("primary", settings.primary_url),
@@ -51,11 +56,15 @@ class BackendRouter:
             try:
                 # Bound the entire attempt, in addition to HTTPX's per-operation timeout.
                 async with asyncio.timeout(self.timeout):
+                    encoded = backend.adapter.encode(request)
                     response = await self.client.post(
-                        f"{backend.url}/infer", json=request.model_dump()
+                        f"{backend.url}{encoded.path}",
+                        json=encoded.json,
+                        content=encoded.content,
+                        headers=encoded.headers,
                     )
                     response.raise_for_status()
-                    result = BackendResponse.model_validate(response.json())
+                    result = backend.adapter.decode(response, request)
                     if len(result.outputs) != len(request.inputs):
                         raise ValueError("Backend returned the wrong output shape")
             except asyncio.CancelledError:

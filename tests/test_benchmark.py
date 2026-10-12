@@ -19,6 +19,73 @@ def test_percentiles_use_nearest_rank():
     assert percentile([4], 99) == 4
 
 
+@pytest.mark.parametrize("duration", [0, -1, float("nan"), float("inf"), 3601])
+def test_invalid_duration_is_rejected(duration):
+    with pytest.raises(ValueError):
+        BenchmarkConfig(duration_seconds=duration)
+
+
+def test_workload_modes_are_exclusive_and_default_to_100_requests():
+    assert BenchmarkConfig().requests == 100
+    assert BenchmarkConfig(duration_seconds=60).requests is None
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        BenchmarkConfig(requests=100, duration_seconds=60)
+
+
+async def test_duration_refills_workers_beyond_default_request_count(monkeypatch):
+    clock = [0.0]
+    monkeypatch.setattr("inference_guard.benchmark.monotonic", lambda: clock[0])
+
+    async def handler(_):
+        clock[0] += 1
+        await asyncio.sleep(0)
+        return httpx.Response(200, json={**RESULT, "backend": "primary"})
+
+    config = BenchmarkConfig(duration_seconds=150, concurrency=2)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        phase = await BenchmarkRunner(config, client).measure(Scenario.baseline)
+    assert phase.requests == phase.successful == 150
+    assert [s.index for s in phase.samples] == list(range(150))
+    assert all(s.started_ms < 150_000 for s in phase.samples)
+    assert phase.elapsed_seconds == 150
+
+
+async def test_duration_stops_dispatch_at_deadline_and_drains_inflight_requests(monkeypatch):
+    clock = [0.0]
+    monkeypatch.setattr("inference_guard.benchmark.monotonic", lambda: clock[0])
+    started = asyncio.Event()
+    release = asyncio.Event()
+    calls = 0
+
+    async def handler(_):
+        nonlocal calls
+        calls += 1
+        index = calls
+        if calls == 3:
+            started.set()
+        await release.wait()
+        return (
+            httpx.Response(503)
+            if index == 1
+            else httpx.Response(200, json={**RESULT, "backend": "primary"})
+        )
+
+    config = BenchmarkConfig(duration_seconds=60, concurrency=3)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        task = asyncio.create_task(BenchmarkRunner(config, client).measure(Scenario.baseline))
+        try:
+            await asyncio.wait_for(started.wait(), timeout=1)
+            clock[0] = 61  # Requests finish after the dispatch window closes.
+        finally:
+            release.set()
+        phase = await task
+    assert calls == phase.requests == 3
+    assert phase.successful == 2
+    assert phase.errors == {"http_503": 1}
+    assert phase.elapsed_seconds == 61
+    assert phase.attempted_rps == 3 / 61
+
+
 async def test_load_bounds_concurrency_and_counts_every_outcome():
     active = peak = calls = 0
 
@@ -65,7 +132,7 @@ async def test_total_request_timeout_is_measured_as_failure():
 
 
 @asynccontextmanager
-async def benchmark_stack(scenario=Scenario.all):
+async def benchmark_stack(scenario=Scenario.all, duration=None):
     enabled = True
     delay = 0.0
     toxics = []
@@ -110,7 +177,8 @@ async def benchmark_stack(scenario=Scenario.all):
     )
     config = BenchmarkConfig(
         scenario=scenario,
-        requests=8,
+        requests=8 if duration is None else None,
+        duration_seconds=duration,
         concurrency=2,
         warmup=1,
         latency_ms=30,
@@ -158,16 +226,33 @@ async def test_baseline_excludes_preparation_and_warmup_from_counts():
     assert report.phases[0].requests == 8
 
 
-async def test_cancelled_benchmark_restores_outage(monkeypatch):
+async def test_duration_applies_to_all_scenarios_and_measures_recovery_during_traffic():
+    async with benchmark_stack(duration=0.06) as (runner, faults, _):
+        report = await runner.run()
+        assert report.passed
+        assert len(report.phases) == 4
+        assert all(p.elapsed_seconds >= 0.06 and p.requests > 0 for p in report.phases)
+        recovery = report.phases[-1]
+        assert recovery.primary_requests > 0
+        assert recovery.fallback_requests > 0
+        assert recovery.recovery_seconds is not None
+        # Cooldown starts when the circuit opens, before fault removal and timing.
+        assert 0 < recovery.recovery_seconds <= recovery.elapsed_seconds
+        assert not recovery.recovery_probes
+        await faults.preflight()
+
+
+@pytest.mark.parametrize("duration", [None, 60])
+async def test_cancelled_benchmark_restores_outage(monkeypatch, duration):
     started = asyncio.Event()
-    async with benchmark_stack(Scenario.outage) as (runner, faults, _):
+    async with benchmark_stack(Scenario.outage, duration=duration) as (runner, faults, _):
         original_load = runner.load
 
-        async def blocked_load(scenario, count, origin=None):
+        async def blocked_load(scenario, count, origin=None, **kwargs):
             if scenario == Scenario.outage:
                 started.set()
                 await asyncio.Event().wait()
-            return await original_load(scenario, count, origin)
+            return await original_load(scenario, count, origin, **kwargs)
 
         monkeypatch.setattr(runner, "load", blocked_load)
         task = asyncio.create_task(runner.run())

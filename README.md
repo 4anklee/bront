@@ -138,6 +138,23 @@ from those measurements. Recovery time is measured from fault removal and is
 normally about 10 seconds with the Compose defaults. A full four-scenario run
 also waits for primary recovery between phases.
 
+For sustained traffic, use `--duration` instead of `--requests`:
+
+```sh
+uv run --frozen inferenceguard benchmark \
+  --scenario baseline --duration 60 --concurrency 10 \
+  --output reports/sustained.json
+```
+
+Duration is in seconds **per scenario** (0.001–3600). Each worker sends another
+request as soon as the previous one finishes, up to the concurrency limit. The
+runner stops starting requests at the deadline and waits for in-flight requests
+to finish within their client timeouts. Reported elapsed time and throughput
+include that final drain. Setup, warmup, and extra recovery probes are outside
+the measured duration; `--scenario all --duration 60` measures four 60-second
+phases, plus that overhead. `--duration` and `--requests` cannot be combined.
+Omitting both retains the default of 100 measured requests per scenario.
+
 The CLI reads `.env` in the current directory. It uses `IG_GATEWAY_PORT` (default
 `8000`) and `IG_TOXIPROXY_PORT` (default `18474`) for local URLs. Override these
 with `--gateway-url` and `--toxiproxy-url`, or set `IG_BENCHMARK_GATEWAY_URL` and
@@ -158,6 +175,10 @@ Exit codes are `0` for passing scenarios, `1` for failed expectations, and `2`
 when the run cannot complete. Completed runs write the JSON report even when
 expectations fail. The report includes configuration, individual samples,
 errors, and recovery probes. Local `reports/` files are ignored by Git.
+Report schema version 2 adds `config.duration_seconds`; `config.requests` is
+`null` in duration mode. Each phase's `requests` is always the actual measured
+count. Individual samples are retained in memory, so longer runs produce larger
+reports.
 
 CI runs the small four-scenario workload against fresh mock services and the
 fault proxy. It checks correctness and recovery without imposing throughput or

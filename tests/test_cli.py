@@ -1,6 +1,7 @@
 import json
 
 import httpx
+import pytest
 from typer.testing import CliRunner
 
 from inference_guard.benchmark import (
@@ -17,12 +18,23 @@ runner = CliRunner()
 
 def test_help_and_invalid_options():
     assert runner.invoke(app, ["benchmark", "--help"]).exit_code == 0
-    for args in (["--requests", "0"], ["--concurrency", "0"], ["--scenario", "unknown"]):
+    for args in (
+        ["--requests", "0"],
+        ["--concurrency", "0"],
+        ["--scenario", "unknown"],
+        ["--duration", "0"],
+        ["--duration", "-1"],
+        ["--duration", "3601"],
+        ["--duration", "nan"],
+        ["--duration", "inf"],
+        ["--duration", "60", "--requests", "100"],
+    ):
         result = runner.invoke(app, ["benchmark", *args])
         assert result.exit_code == 2
 
 
-def test_json_export_and_env_configuration(monkeypatch, tmp_path):
+@pytest.mark.parametrize("workload", [[], ["--requests", "20"], ["--duration", "60"]])
+def test_json_export_and_env_configuration(monkeypatch, tmp_path, workload):
     captured = []
 
     async def fake_run(config, progress):
@@ -53,10 +65,15 @@ def test_json_export_and_env_configuration(monkeypatch, tmp_path):
     monkeypatch.delenv("IG_GATEWAY_PORT", raising=False)
     (tmp_path / ".env").write_text("IG_GATEWAY_PORT=18000\n")
     output = tmp_path / "results" / "run.json"
-    result = runner.invoke(app, ["benchmark", "--json", "--output", str(output)])
+    result = runner.invoke(app, ["benchmark", *workload, "--json", "--output", str(output)])
     assert result.exit_code == 0, result.output
     report = json.loads(result.stdout)
     assert report["passed"] is True
+    assert report["schema_version"] == 2
+    assert report["config"]["requests"] == (
+        None if "--duration" in workload else 20 if workload else 100
+    )
+    assert report["config"]["duration_seconds"] == (60 if "--duration" in workload else None)
     assert report == json.loads(output.read_text())
     assert str(captured[0].gateway_url) == "http://127.0.0.1:18000/"
     assert "Preparing baseline" in result.stderr

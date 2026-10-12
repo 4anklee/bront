@@ -52,6 +52,11 @@ def render(report: BenchmarkReport) -> None:
     console.print("Latency includes failed requests. Warmup and recovery probes are excluded.")
     for phase in report.phases:
         console.print(f"{phase.scenario}: success {phase.success_rate:.1%}; errors {phase.errors}")
+        if report.config.duration_seconds is not None:
+            console.print(
+                f"Measured {phase.requests} requests over {phase.elapsed_seconds:.3f}s "
+                f"including drain; requested duration {report.config.duration_seconds:g}s"
+            )
         if phase.scenario == Scenario.recovery:
             recovery = (
                 f"{phase.recovery_seconds:.3f}s"
@@ -70,8 +75,21 @@ def benchmark(
         Scenario, typer.Option(help="Scenario to measure; all runs four phases.")
     ] = Scenario.baseline,
     requests: Annotated[
-        int, typer.Option(min=1, max=1_000_000, help="Measured requests per scenario.")
-    ] = 100,
+        int | None,
+        typer.Option(
+            min=1,
+            max=1_000_000,
+            help="Measured requests per scenario; defaults to 100 unless --duration is set.",
+        ),
+    ] = None,
+    duration: Annotated[
+        float | None,
+        typer.Option(
+            min=0.001,
+            max=3600,
+            help="Seconds of measured traffic per scenario; mutually exclusive with --requests.",
+        ),
+    ] = None,
     concurrency: Annotated[
         int, typer.Option(min=1, max=1000, help="Maximum in-flight requests.")
     ] = 10,
@@ -123,6 +141,7 @@ def benchmark(
             or f"http://127.0.0.1:{os.getenv('IG_TOXIPROXY_PORT', '18474')}",
             scenario=scenario,
             requests=requests,
+            duration_seconds=duration,
             concurrency=concurrency,
             warmup=warmup,
             timeout_seconds=timeout,

@@ -83,6 +83,11 @@ The other CLI scenarios require Toxiproxy, which is only configured in the
 Compose benchmark overlay for now. Port-forwarding adds overhead, so these
 measurements are a functional check rather than a cluster performance estimate.
 
+To sustain baseline traffic for a minute, replace `--requests 100` with
+`--duration 60`. This exercises the pod selected by the port-forward. To test
+Service load balancing across replicas, run the benchmark inside the cluster
+against `http://gateway:8000` instead.
+
 ## Configuration and health
 
 | Component | CPU request / limit | Memory request / limit | Readiness |

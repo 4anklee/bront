@@ -6,11 +6,12 @@ from collections import Counter
 from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import StrEnum
+from itertools import count as counter
 from time import monotonic
-from typing import Literal
+from typing import Literal, Self
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
 from inference_guard.faults import FaultController
 from inference_guard.schemas import InferenceResponse
@@ -32,12 +33,21 @@ class BenchmarkConfig(BaseModel):
     gateway_url: HttpUrl = HttpUrl("http://127.0.0.1:8000")
     toxiproxy_url: HttpUrl = HttpUrl("http://127.0.0.1:18474")
     scenario: Scenario = Scenario.baseline
-    requests: int = Field(default=100, ge=1, le=1_000_000)
+    requests: int | None = Field(default=None, ge=1, le=1_000_000)
+    duration_seconds: float | None = Field(default=None, gt=0, le=3600)
     concurrency: int = Field(default=10, ge=1, le=1000)
     warmup: int = Field(default=10, ge=0, le=10000)
     timeout_seconds: float = Field(default=5, gt=0, le=300)
     latency_ms: int = Field(default=2000, ge=1, le=30000)
     recovery_timeout_seconds: float = Field(default=30, gt=0, le=300)
+
+    @model_validator(mode="after")
+    def select_workload(self) -> Self:
+        if self.duration_seconds is not None and self.requests is not None:
+            raise ValueError("--duration and --requests are mutually exclusive")
+        if self.duration_seconds is None and self.requests is None:
+            self.requests = 100
+        return self
 
 
 class GatewayConfiguration(BaseModel):
@@ -76,7 +86,7 @@ class PhaseResult(BaseModel):
 
 
 class BenchmarkReport(BaseModel):
-    schema_version: int = 1
+    schema_version: int = 2
     started_at: str
     config: BenchmarkConfig
     gateway_configuration: GatewayConfiguration
@@ -157,21 +167,49 @@ class BenchmarkRunner:
         return sample
 
     async def load(
-        self, scenario: Scenario, count: int, origin: float | None = None
+        self,
+        scenario: Scenario,
+        count: int | None,
+        origin: float | None = None,
+        *,
+        duration_seconds: float | None = None,
     ) -> PhaseResult:
+        if (count is None) == (duration_seconds is None):
+            raise ValueError("Specify exactly one request count or duration")
         started = monotonic() if origin is None else origin
-        indices = iter(range(count))
+        deadline = started + duration_seconds if duration_seconds is not None else None
+        indices = iter(range(count)) if count is not None else counter()
         samples: list[Sample] = []
 
         async def worker() -> None:
             # No await between obtaining an index and owning it; only C tasks are created.
             for index in indices:
+                if deadline is not None and monotonic() >= deadline:
+                    break
                 samples.append(await self.request(index, started))
+                # Yield even when a transport fails immediately, so other workers
+                # and cancellation continue to run during sustained traffic.
+                await asyncio.sleep(0)
 
         async with asyncio.TaskGroup() as group:
-            for _ in range(min(self.config.concurrency, count)):
+            workers = (
+                min(self.config.concurrency, count)
+                if count is not None
+                else self.config.concurrency
+            )
+            for _ in range(workers):
                 group.create_task(worker())
+        if not samples:
+            raise RuntimeError("No requests were measured; increase --duration")
         return summarize(scenario, sorted(samples, key=lambda s: s.index), monotonic() - started)
+
+    async def measure(self, scenario: Scenario, origin: float | None = None) -> PhaseResult:
+        return await self.load(
+            scenario,
+            self.config.requests,
+            origin,
+            duration_seconds=self.config.duration_seconds,
+        )
 
     async def status(self) -> dict:
         response = await self.client.get(self.url + "/status")
@@ -215,7 +253,7 @@ class BenchmarkRunner:
 
         if scenario == Scenario.baseline:
             self.progress("Measuring baseline")
-            result = await self.load(scenario, self.config.requests)
+            result = await self.measure(scenario)
             result.expectations_met = (
                 result.primary_requests == result.requests and not result.failed
             )
@@ -245,7 +283,7 @@ class BenchmarkRunner:
                 await self.faults.restore()
                 restored_at = monotonic()
                 self.progress("Measuring recovery from fault removal")
-                result = await self.load(scenario, self.config.requests, origin=restored_at)
+                result = await self.measure(scenario, origin=restored_at)
                 self.progress("Observing return to primary (separate recovery probes)")
                 await self.observe_recovery(result, restored_at)
                 result.expectations_met = (
@@ -255,7 +293,7 @@ class BenchmarkRunner:
                 )
             else:
                 self.progress(f"Measuring {scenario}")
-                result = await self.load(scenario, self.config.requests)
+                result = await self.measure(scenario)
                 result.expectations_met = (
                     not result.failed and result.fallback_requests == result.requests
                 )

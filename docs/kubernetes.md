@@ -88,6 +88,51 @@ To sustain baseline traffic for a minute, replace `--requests 100` with
 Service load balancing across replicas, run the benchmark inside the cluster
 against `http://gateway:8000` instead.
 
+## Benchmark through the gateway Service
+
+The optional benchmark Job runs inside the cluster and sends 60 seconds of
+baseline traffic to `http://gateway:8000` with concurrency 20. It is excluded
+from the application Kustomization, so deploying the app does not start a load
+test. Build its separate image tag to include the latest CLI without restarting
+the gateway pods:
+
+```sh
+docker build -t inference-guard:benchmark .
+uv run --frozen python scripts/load_kind_images.py inference-guard:benchmark
+benchmark_job=$(kubectl --context kind-inference-guard \
+  create -f deploy/kubernetes/benchmark-job.yaml -o jsonpath='{.metadata.name}')
+kubectl --context kind-inference-guard -n inference-guard \
+  wait --for=condition=complete "job/$benchmark_job" --timeout=180s
+mkdir -p reports
+kubectl --context kind-inference-guard -n inference-guard \
+  logs "job/$benchmark_job" > "reports/$benchmark_job.json"
+```
+
+Successful Job logs contain a compact JSON summary with counts, latency, errors,
+and configuration. Raw samples are omitted (`samples_omitted: true`) to keep
+container log rotation from truncating large reports. On failure, logs also include CLI
+diagnostics; inspect the Job and its logs before treating them as a JSON report.
+Each invocation creates a new Job. Failed benchmarks are not retried, and finished
+Jobs are automatically removed after an hour, so export results before then.
+
+The Service selects a gateway pod for each new connection. HTTP keep-alive can
+send many requests over the same connection, so an even split is not guaranteed.
+To verify both replicas handle traffic, compare each pod's
+`inferenceguard_requests_total` metrics before and after the run (use `kubectl
+exec` or separate pod port-forwards to fetch `/metrics`). On an otherwise idle
+stack, the increases sum to the measured request count plus warmup and preparation
+requests. Scraping `/metrics` does not increment that counter. This check assumes
+the pods are not replaced during the run; rolling-update measurements need to
+account for counters from both old and new pods.
+
+To inspect or remove a Job manually:
+
+```sh
+kubectl --context kind-inference-guard -n inference-guard describe "job/$benchmark_job"
+kubectl --context kind-inference-guard -n inference-guard logs "job/$benchmark_job"
+kubectl --context kind-inference-guard -n inference-guard delete "job/$benchmark_job"
+```
+
 ## Configuration and health
 
 | Component | CPU request / limit | Memory request / limit | Readiness |

@@ -1,0 +1,53 @@
+# Run explicitly with kubectl create; intentionally excluded from kustomization.yaml.
+apiVersion: batch/v1
+kind: Job
+metadata:
+    generateName: gateway-benchmark-
+    namespace: inference-guard
+spec:
+    backoffLimit: 0
+    activeDeadlineSeconds: 180
+    ttlSecondsAfterFinished: 3600
+    template:
+        metadata:
+            labels:
+                app: gateway-benchmark
+        spec:
+            restartPolicy: Never
+            containers:
+                - name: benchmark
+                  image: inference-guard:benchmark
+                  imagePullPolicy: IfNotPresent
+                  resources:
+                      requests:
+                          cpu: 100m
+                          memory: 256Mi
+                      limits:
+                          cpu: "2"
+                          memory: 1Gi
+                  # Keep successful Job logs compact JSON to avoid log rotation
+                  # truncating reports containing thousands of raw samples.
+                  # Failed runs also include CLI diagnostics and fail the Job.
+                  command: [/app/.venv/bin/python, -c]
+                  args:
+                      - |
+                        import json
+                        import subprocess
+                        import sys
+
+                        result = subprocess.run(
+                            ["/app/.venv/bin/inferenceguard", "benchmark",
+                             "--gateway-url", "http://gateway:8000",
+                             "--scenario", "baseline", "--duration", "60",
+                             "--concurrency", "20", "--warmup", "10", "--json"],
+                            capture_output=True, text=True,
+                        )
+                        if result.stdout:
+                            report = json.loads(result.stdout)
+                            for phase in report["phases"]:
+                                phase.pop("samples")
+                            report["samples_omitted"] = True
+                            print(json.dumps(report, indent=2), flush=True)
+                        if result.returncode:
+                            print(result.stderr, end="", file=sys.stderr, flush=True)
+                        sys.exit(result.returncode)

@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from socket import gethostname
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -48,6 +49,7 @@ def create_app(
     @app.get("/status")
     async def status(request: Request) -> dict:
         return {
+            "instance": gethostname(),
             "backends": request.app.state.router.status(),
             "configuration": {
                 "primary_protocol": settings.primary_protocol,

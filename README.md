@@ -80,6 +80,18 @@ uv run python scripts/smoke_compose.py \
   --fallback-url http://127.0.0.1:18002
 ```
 
+## Inspect and control the demo
+
+```sh
+uv run inferenceguard status --check-backends
+uv run inferenceguard fault outage
+uv run inferenceguard fault reset
+```
+
+Fault commands require the Compose benchmark overlay. See the
+[terminal controls guide](docs/terminal-demo.md) for setup, URL options, persistent
+fault semantics, and the distinction between circuit observations and active checks.
+
 ## Try failover and recovery
 
 ```sh

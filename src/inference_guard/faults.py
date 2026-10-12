@@ -7,10 +7,12 @@ import httpx
 
 
 class FaultController:
-    def __init__(self, client: httpx.AsyncClient, url: str) -> None:
+    def __init__(
+        self, client: httpx.AsyncClient, url: str, *, toxic_name: str | None = None
+    ) -> None:
         self.client = client
         self.url = url.rstrip("/") + "/proxies/primary"
-        self.toxic_name = "inferenceguard-" + uuid4().hex
+        self.toxic_name = toxic_name or "inferenceguard-" + uuid4().hex
         self.disabled = False
         self.delayed = False
 

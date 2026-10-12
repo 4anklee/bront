@@ -23,7 +23,10 @@ An upstream timeout cannot guarantee that the backend stopped computing. Failove
 is appropriate here because the workload has no side effects.
 
 Metrics report validated request outcomes, actual backend attempt outcomes, and
-attempt latency including errors. Skipped circuits do not count as attempts.
+attempt latency including errors, one-hot circuit state, transitions, and completed
+open-to-closed recovery episodes. Skipped circuits do not count as attempts.
+The [Kubernetes monitoring stack](observability.md) scrapes each gateway pod
+separately, preserving the independence of its counters and circuit observations.
 Validation failures and disconnected/cancelled requests are not included in the
 request outcome counter. `/healthz` is liveness only; neither it nor `/status`
 guarantees that a backend will serve the next inference request.

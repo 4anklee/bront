@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: grafana}
+  template:
+    metadata:
+      labels: {app: grafana}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {fsGroup: 472, runAsUser: 472, runAsNonRoot: true}
+      containers:
+        - name: grafana
+          image: grafana/grafana:12.4.0
+          ports: [{name: http, containerPort: 3000}]
+          env:
+            - {name: GF_AUTH_ANONYMOUS_ENABLED, value: "true"}
+            - {name: GF_AUTH_ANONYMOUS_ORG_ROLE, value: Viewer}
+            - {name: GF_AUTH_DISABLE_LOGIN_FORM, value: "true"}
+            - {name: GF_AUTH_BASIC_ENABLED, value: "false"}
+            - {name: GF_ANALYTICS_REPORTING_ENABLED, value: "false"}
+            - {name: GF_ANALYTICS_CHECK_FOR_UPDATES, value: "false"}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: "1", memory: 384Mi}
+          readinessProbe:
+            httpGet: {path: /api/health, port: http}
+          startupProbe:
+            httpGet: {path: /api/health, port: http}
+            periodSeconds: 2
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: {path: /api/health, port: http}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/grafana}
+            - name: provisioning
+              mountPath: /etc/grafana/provisioning/datasources/datasources.yml
+              subPath: datasources.yml
+              readOnly: true
+            - name: provisioning
+              mountPath: /etc/grafana/provisioning/dashboards/dashboards.yml
+              subPath: dashboards.yml
+              readOnly: true
+            - {name: dashboard, mountPath: /var/lib/grafana/dashboards, readOnly: true}
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: provisioning
+          configMap: {name: grafana-provisioning}
+        - name: dashboard
+          configMap: {name: grafana-dashboard}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+spec:
+  selector: {app: grafana}
+  ports: [{name: http, port: 3000, targetPort: http}]

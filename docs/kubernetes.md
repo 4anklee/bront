@@ -241,3 +241,8 @@ kubectl --context kind-inference-guard delete namespace inference-guard
 # Alternatively:
 kind delete cluster --name inference-guard
 ```
+
+## Observe individual gateway replicas
+
+Install the optional [Prometheus and Grafana stack](observability.md) to scrape
+each gateway pod directly and compare its circuit state and request metrics.

@@ -11,6 +11,8 @@ The benchmark CLI measures baseline, outage, slow-backend, and recovery scenario
 A [local Kubernetes deployment](docs/kubernetes.md) runs the gateway, Triton, and
 fallback with resource budgets and health probes. Trained AI models and
 latency-aware routing remain future work.
+The optional [Kubernetes dashboard](docs/observability.md) compares request success,
+fallback usage, latency, circuit state, and recovery across individual gateway pods.
 
 ```mermaid
 flowchart LR

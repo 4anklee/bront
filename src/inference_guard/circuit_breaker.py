@@ -14,10 +14,12 @@ class CircuitBreaker:
         failure_threshold: int,
         recovery_timeout: float,
         clock: Callable[[], float] = monotonic,
+        on_transition: Callable[[str, str, float], None] | None = None,
     ) -> None:
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.clock = clock
+        self.on_transition = on_transition
         self.state = "closed"
         self.failures = 0
         self.opened_at = 0.0
@@ -27,7 +29,7 @@ class CircuitBreaker:
         if self.state == "open":
             if self.clock() - self.opened_at < self.recovery_timeout:
                 return None
-            self.state = "half_open"
+            self._transition("half_open")
             return self.generation
         if self.state == "half_open":
             return None
@@ -38,7 +40,7 @@ class CircuitBreaker:
             return
         if self.state == "half_open":
             self.generation += 1
-        self.state = "closed"
+        self._transition("closed")
         self.failures = 0
 
     def fail(self, ticket: int) -> None:
@@ -46,9 +48,15 @@ class CircuitBreaker:
             return
         self.failures += 1
         if self.state == "half_open" or self.failures >= self.failure_threshold:
-            self.state = "open"
+            self._transition("open")
             self.opened_at = self.clock()
             self.generation += 1
+
+    def _transition(self, state: str) -> None:
+        previous = self.state
+        self.state = state
+        if previous != state and self.on_transition is not None:
+            self.on_transition(previous, state, self.clock())
 
     def snapshot(self) -> dict[str, str | int]:
         return {"state": self.state, "consecutive_failures": self.failures}

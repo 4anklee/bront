@@ -36,7 +36,11 @@ class BackendRouter:
             Backend(
                 name,
                 str(url).rstrip("/"),
-                CircuitBreaker(settings.failure_threshold, settings.recovery_timeout_seconds),
+                CircuitBreaker(
+                    settings.failure_threshold,
+                    settings.recovery_timeout_seconds,
+                    on_transition=metrics.watch_circuit(name),
+                ),
                 TritonAdapter()
                 if name == "primary" and settings.primary_protocol == "triton"
                 else MockAdapter(),

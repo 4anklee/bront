@@ -7,8 +7,8 @@ The default workload is **two mock services**, each doubling a list of numbers.
 An alternative stack runs **NVIDIA Triton with an ONNX model on CPU** as primary,
 preserving the same inputs and outputs through the mock fallback. Follow the
 [Triton walkthrough](docs/triton.md) to run it and verify outage recovery.
-Trained AI models, latency-aware routing, Kubernetes, and a benchmark CLI remain
-future work.
+The benchmark CLI measures baseline, outage, slow-backend, and recovery scenarios.
+Trained AI models, latency-aware routing, and Kubernetes remain future work.
 
 ```mermaid
 flowchart LR
@@ -104,6 +104,66 @@ curl -s -X PUT http://localhost:8001/faults \
 `PUT /faults` replaces all fault settings; `{}` resets them. Fault injection is
 an unauthenticated local demo feature. Compose publishes ports on loopback only.
 
+## Benchmark failover and recovery
+
+Start the mock stack with the Toxiproxy overlay, which lets the CLI interrupt or
+delay traffic to the primary:
+
+```sh
+docker compose -f compose.yaml -f compose.benchmark.yaml \
+  up --build -d --wait --wait-timeout 120
+uv run --frozen inferenceguard benchmark \
+  --scenario all --requests 100 --concurrency 10 \
+  --output reports/benchmark.json
+```
+
+For Triton, replace `compose.yaml` with `compose.triton.yaml` in the Compose
+command and allow `--wait-timeout 180`. Run one benchmark at a time against a
+local demo stack with healthy backends. The CLI restores the faults it injects
+on normal exit and interruption.
+
+| Scenario | Passing behavior |
+| --- | --- |
+| `baseline` | Every measured request succeeds through primary |
+| `outage` | Primary connections are disabled; every measured request succeeds through fallback |
+| `slow-backend` | Primary responses are delayed past the gateway timeout; every measured request succeeds through fallback |
+| `recovery` | After an outage opens the circuit, clear the fault; all measured requests succeed and primary returns before the recovery deadline |
+
+`--requests` is the measured count **per scenario**. The table reports primary
+and fallback counts, attempted requests per second, and p50/p95/p99 latency.
+Latency includes failed requests; warmup and extra recovery probes are excluded
+from those measurements. Recovery time is measured from fault removal and is
+normally about 10 seconds with the Compose defaults. A full four-scenario run
+also waits for primary recovery between phases.
+
+The CLI reads `.env` in the current directory. It uses `IG_GATEWAY_PORT` (default
+`8000`) and `IG_TOXIPROXY_PORT` (default `18474`) for local URLs. Override these
+with `--gateway-url` and `--toxiproxy-url`, or set `IG_BENCHMARK_GATEWAY_URL` and
+`IG_BENCHMARK_TOXIPROXY_URL`. Explicit CLI URLs take precedence.
+
+```sh
+# A quick run matching CI's workload: 80 measured requests in total.
+uv run --frozen inferenceguard benchmark \
+  --scenario all --requests 20 --concurrency 4 --warmup 4 \
+  --output reports/benchmark-ci.json
+uv run inferenceguard benchmark --help
+
+# Use compose.triton.yaml here if you started the Triton stack.
+docker compose -f compose.yaml -f compose.benchmark.yaml down
+```
+
+Exit codes are `0` for passing scenarios, `1` for failed expectations, and `2`
+when the run cannot complete. Completed runs write the JSON report even when
+expectations fail. The report includes configuration, individual samples,
+errors, and recovery probes. Local `reports/` files are ignored by Git.
+
+CI runs the small four-scenario workload against fresh mock services and the
+fault proxy. It checks correctness and recovery without imposing throughput or
+latency thresholds on shared runners. Download `benchmark-report` from the
+workflow run's **Artifacts** section; reports are retained for 14 days, including
+completed runs with failed expectations. Setup errors that prevent report
+creation are recorded in the job logs.
+
 ## API and configuration
 
 | Endpoint | Purpose |
@@ -139,6 +199,9 @@ src/inference_guard/
   metrics.py          Per-app Prometheus registry
   schemas.py          Shared inference request/response contract
   mock_backend.py     Deterministic workload and fault injection
+  cli.py              Typer benchmark command and result table
+  benchmark.py        Concurrent measurements and scenario checks
+  faults.py           Toxiproxy fault injection and cleanup
 tests/                Routing, deadlines, recovery, validation and mock tests
 deploy/prometheus/    Optional scrape configuration
 docs/architecture.md  Design boundaries and next implementation steps
@@ -152,8 +215,9 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-CI runs these checks, builds and starts the Compose services, and runs the smoke
-check before shutting them down. Dependencies are locked in
+CI runs these checks plus type checking, builds and starts the Compose services,
+and runs the smoke check. A separate benchmark job runs all four scenarios and
+uploads its JSON report. Both jobs clean up their containers. Dependencies are locked in
 `uv.lock`. See [architecture notes](docs/architecture.md) for reliability semantics
 and the path to a real inference workload.
 

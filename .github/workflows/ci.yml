@@ -26,3 +26,41 @@ jobs:
             - name: Stop Compose services
               if: always()
               run: docker compose down
+
+    benchmark:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        env:
+            COMPOSE_FILE: compose.yaml:compose.benchmark.yaml
+            COMPOSE_PROJECT_NAME: inferenceguard-benchmark-ci
+        steps:
+            - uses: actions/checkout@v4
+            - uses: astral-sh/setup-uv@v6
+              with:
+                  version: "0.11.21"
+                  enable-cache: true
+            - run: uv sync --frozen
+            - run: docker compose config --quiet
+            - name: Start benchmark stack
+              run: docker compose up --build --wait --wait-timeout 120
+            - name: Run all benchmark scenarios
+              run: >-
+                  uv run --frozen inferenceguard benchmark
+                  --scenario all --requests 20 --concurrency 4 --warmup 4
+                  --gateway-url http://127.0.0.1:8000
+                  --toxiproxy-url http://127.0.0.1:18474
+                  --output reports/benchmark-ci.json
+            - name: Upload benchmark report
+              if: always() && hashFiles('reports/benchmark-ci.json') != ''
+              uses: actions/upload-artifact@v7
+              with:
+                  name: benchmark-report
+                  path: reports/benchmark-ci.json
+                  if-no-files-found: error
+                  retention-days: 14
+            - name: Benchmark Compose logs
+              if: failure()
+              run: docker compose logs --no-color
+            - name: Stop benchmark services
+              if: always()
+              run: docker compose down

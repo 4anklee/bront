@@ -49,13 +49,15 @@ logic. Triton model version `1` is pinned in both the adapter and model reposito
 configuration. See the [Triton walkthrough](triton.md) for the wire contract,
 model generation, and a real container outage/recovery check.
 
-1. Add a concurrent benchmark CLI reporting measured success rate, fallback
-   count, throughput, and latency percentiles. Run baseline, failure, delay, and
-   recovery scenarios with reproducible configuration.
-2. Add Kubernetes Deployments, Services, resource limits, and separate readiness
+The concurrent benchmark CLI reports success rate, fallback count, throughput,
+latency percentiles, and recovery time. CI runs baseline, outage, slow-backend,
+and recovery scenarios against mocks with Toxiproxy and uploads a JSON report.
+See [benchmark instructions](../README.md#benchmark-failover-and-recovery).
+
+1. Add Kubernetes Deployments, Services, resource limits, and separate readiness
    and liveness probes; validate locally with kind. Decide how replica-local
    circuit state should affect readiness without blocking recovery traffic.
-3. Add recent latency/error windows and evaluate whether latency-aware routing
+2. Add recent latency/error windows and evaluate whether latency-aware routing
    improves measured behavior over primary-first routing.
 
 TensorRT-LLM and NeMo remain optional future integrations. No production or

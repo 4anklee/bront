@@ -23,13 +23,25 @@ def create_app(
             timeout=settings.request_timeout_seconds, transport=transport, trust_env=False
         ) as client:
             app.state.router = BackendRouter(client, settings, metrics)
-            yield
+            app.state.ready = True
+            try:
+                yield
+            finally:
+                app.state.ready = False
 
     app = FastAPI(title="InferenceGuard", version="0.1.0", lifespan=lifespan)
 
     @app.get("/healthz")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/readyz")
+    async def ready(request: Request) -> dict[str, str]:
+        # Backend failures must not remove the gateway from service: traffic
+        # drives circuit recovery and can still be served by the fallback.
+        if not getattr(request.app.state, "ready", False):
+            raise HTTPException(status_code=503, detail="Gateway is not ready")
+        return {"status": "ready"}
 
     @app.get("/status")
     async def status(request: Request) -> dict:

@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: triton
+spec:
+    replicas: 1
+    # Avoid running two large Triton instances during a local model update.
+    strategy:
+        type: Recreate
+    selector:
+        matchLabels:
+            app: triton
+    template:
+        metadata:
+            labels:
+                app: triton
+        spec:
+            terminationGracePeriodSeconds: 30
+            containers:
+                - name: triton
+                  image: nvcr.io/nvidia/tritonserver:26.08-py3
+                  imagePullPolicy: IfNotPresent
+                  command:
+                      - tritonserver
+                      - --model-repository=/models
+                      - --disable-auto-complete-config
+                      - --allow-grpc=false
+                      - --allow-gpu-metrics=false
+                  ports:
+                      - name: http
+                        containerPort: 8000
+                  resources:
+                      requests:
+                          cpu: "1"
+                          memory: 1Gi
+                      limits:
+                          cpu: "2"
+                          memory: 2Gi
+                  volumeMounts:
+                      # Keep ConfigMap metadata directories out of Triton's model scan.
+                      - name: models
+                        mountPath: /models/double/config.pbtxt
+                        subPath: double/config.pbtxt
+                        readOnly: true
+                      - name: models
+                        mountPath: /models/double/1/model.onnx
+                        subPath: double/1/model.onnx
+                        readOnly: true
+                  startupProbe:
+                      httpGet:
+                          path: /v2/models/double/versions/1/ready
+                          port: http
+                      periodSeconds: 5
+                      timeoutSeconds: 2
+                      failureThreshold: 60
+                  livenessProbe:
+                      httpGet:
+                          path: /v2/health/live
+                          port: http
+                      periodSeconds: 10
+                      timeoutSeconds: 2
+                  readinessProbe:
+                      httpGet:
+                          path: /v2/models/double/versions/1/ready
+                          port: http
+                      periodSeconds: 2
+                      timeoutSeconds: 2
+            volumes:
+                - name: models
+                  configMap:
+                      name: triton-model
+                      items:
+                          - key: config.pbtxt
+                            path: double/config.pbtxt
+                          - key: model.onnx
+                            path: double/1/model.onnx
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: triton
+spec:
+    selector:
+        app: triton
+    ports:
+        - name: http
+          port: 8000
+          targetPort: http

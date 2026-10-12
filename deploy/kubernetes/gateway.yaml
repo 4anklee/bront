@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: gateway
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: gateway
+    template:
+        metadata:
+            labels:
+                app: gateway
+        spec:
+            terminationGracePeriodSeconds: 30
+            containers:
+                - name: gateway
+                  image: inference-guard:local
+                  imagePullPolicy: IfNotPresent
+                  ports:
+                      - name: http
+                        containerPort: 8000
+                  envFrom:
+                      - configMapRef:
+                            name: gateway-config
+                  resources:
+                      requests:
+                          cpu: 100m
+                          memory: 128Mi
+                      limits:
+                          cpu: "1"
+                          memory: 256Mi
+                  startupProbe:
+                      httpGet:
+                          path: /healthz
+                          port: http
+                      periodSeconds: 2
+                      failureThreshold: 30
+                  livenessProbe:
+                      httpGet:
+                          path: /healthz
+                          port: http
+                      periodSeconds: 10
+                      timeoutSeconds: 2
+                  readinessProbe:
+                      httpGet:
+                          path: /readyz
+                          port: http
+                      periodSeconds: 2
+                      timeoutSeconds: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: gateway
+spec:
+    selector:
+        app: gateway
+    ports:
+        - name: http
+          port: 8000
+          targetPort: http

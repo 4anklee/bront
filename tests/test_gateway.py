@@ -92,6 +92,31 @@ async def test_all_backends_down_returns_503():
         assert response.json() == {"detail": "No inference backend available"}
 
 
+async def test_readiness_tracks_lifespan_and_allows_backend_recovery_traffic():
+    calls = []
+
+    def unavailable(request):
+        calls.append(request.url.host)
+        return httpx.Response(503)
+
+    app = create_app(
+        Settings(_env_file=None, failure_threshold=1), httpx.MockTransport(unavailable)
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app), base_url="http://gateway"
+    ) as client:
+        assert (await client.get("/readyz")).status_code == 503
+        async with app.router.lifespan_context(app):
+            assert (await client.get("/readyz")).status_code == 200
+            assert calls == []
+            assert (await client.post("/v1/infer", json=PAYLOAD)).status_code == 503
+            assert all(b.breaker.state == "open" for b in app.state.router.backends)
+            assert (await client.get("/readyz")).status_code == 200
+            assert (await client.get("/healthz")).status_code == 200
+            assert len(calls) == 2
+        assert (await client.get("/readyz")).status_code == 503
+
+
 async def test_recovered_primary_is_used_after_cooldown():
     broken = True
 

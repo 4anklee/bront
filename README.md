@@ -8,7 +8,9 @@ An alternative stack runs **NVIDIA Triton with an ONNX model on CPU** as primary
 preserving the same inputs and outputs through the mock fallback. Follow the
 [Triton walkthrough](docs/triton.md) to run it and verify outage recovery.
 The benchmark CLI measures baseline, outage, slow-backend, and recovery scenarios.
-Trained AI models, latency-aware routing, and Kubernetes remain future work.
+A [local Kubernetes deployment](docs/kubernetes.md) runs the gateway, Triton, and
+fallback with resource budgets and health probes. Trained AI models and
+latency-aware routing remain future work.
 
 ```mermaid
 flowchart LR
@@ -170,6 +172,7 @@ creation are recorded in the job logs.
 | --- | --- |
 | `POST /v1/infer` | Validate inputs and try primary, then fallback; 503 if both fail |
 | `GET /healthz` | Gateway process liveness; does not probe backends |
+| `GET /readyz` | Gateway lifespan readiness; stays ready during backend outages |
 | `GET /status` | Observed circuit states; does not actively check backend health |
 | `GET /metrics` | Prometheus request totals, backend attempt totals and latency |
 | Mock `POST /infer` | Deterministic `double` workload |
@@ -204,6 +207,8 @@ src/inference_guard/
   faults.py           Toxiproxy fault injection and cleanup
 tests/                Routing, deadlines, recovery, validation and mock tests
 deploy/prometheus/    Optional scrape configuration
+deploy/kubernetes/    Local kind cluster and Kubernetes workloads
+docs/kubernetes.md    Deployment, failover verification, and cleanup
 docs/architecture.md  Design boundaries and next implementation steps
 ```
 

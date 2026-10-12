@@ -27,6 +27,8 @@ attempt latency including errors. Skipped circuits do not count as attempts.
 Validation failures and disconnected/cancelled requests are not included in the
 request outcome counter. `/healthz` is liveness only; neither it nor `/status`
 guarantees that a backend will serve the next inference request.
+`/readyz` tracks application lifespan readiness independently of backend health,
+so open circuits do not stop the traffic needed for fallback and recovery.
 
 ## Deliberate starter boundaries
 
@@ -54,9 +56,11 @@ latency percentiles, and recovery time. CI runs baseline, outage, slow-backend,
 and recovery scenarios against mocks with Toxiproxy and uploads a JSON report.
 See [benchmark instructions](../README.md#benchmark-failover-and-recovery).
 
-1. Add Kubernetes Deployments, Services, resource limits, and separate readiness
-   and liveness probes; validate locally with kind. Decide how replica-local
-   circuit state should affect readiness without blocking recovery traffic.
+The [local Kubernetes deployment](kubernetes.md) adds Deployments, Services,
+configuration, resource budgets, and health probes, with one gateway replica.
+
+1. Validate rolling updates and multiple gateway replicas under sustained traffic,
+   accounting for independent circuit state and per-process metrics.
 2. Add recent latency/error windows and evaluate whether latency-aware routing
    improves measured behavior over primary-first routing.
 

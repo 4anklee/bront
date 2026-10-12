@@ -32,7 +32,8 @@ uv run uvicorn inference_guard.mock_backend:app --port 8002
 uv run uvicorn inference_guard.gateway:app --port 8000
 ```
 
-Or start the services with Docker Compose:
+Or start the services with Docker Compose (requires a running Docker engine and
+Compose v2). Local development and the container both use Python 3.14:
 
 ```sh
 docker compose up --build
@@ -41,6 +42,36 @@ docker compose --profile observability up --build
 ```
 
 Interactive API docs: <http://localhost:8000/docs>.
+
+### Verify the container stack
+
+Stop any local services using ports 8000–8002 first. Against a fresh demo stack:
+
+```sh
+docker compose config --quiet
+docker compose up --build --wait --wait-timeout 120
+docker compose exec -T gateway /app/.venv/bin/python --version
+uv run python scripts/smoke_compose.py
+docker compose down
+```
+
+The smoke check injects faults into both mocks and verifies primary inference,
+fallback, circuit opening, recovery, timeout handling, all-down 503 responses,
+and the metrics endpoint. It takes about 12 seconds and resets mock faults on
+exit. Run it against a disposable stack with the default configuration; circuit
+state may take another cooldown to recover afterward. If a check fails, inspect
+`docker compose logs --no-color` before stopping the stack.
+
+To keep local Python services running alongside Docker, select different host ports:
+
+```sh
+IG_GATEWAY_PORT=18000 IG_PRIMARY_PORT=18001 IG_FALLBACK_PORT=18002 \
+  docker compose up --build --wait --wait-timeout 120
+uv run python scripts/smoke_compose.py \
+  --gateway-url http://127.0.0.1:18000 \
+  --primary-url http://127.0.0.1:18001 \
+  --fallback-url http://127.0.0.1:18002
+```
 
 ## Try failover and recovery
 
@@ -116,7 +147,8 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-CI runs these checks and builds the Compose services. Dependencies are locked in
+CI runs these checks, builds and starts the Compose services, and runs the smoke
+check before shutting them down. Dependencies are locked in
 `uv.lock`. See [architecture notes](docs/architecture.md) for reliability semantics
 and the path to a real inference workload.
 

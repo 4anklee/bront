@@ -117,6 +117,38 @@ async def test_readiness_tracks_lifespan_and_allows_backend_recovery_traffic():
         assert (await client.get("/readyz")).status_code == 503
 
 
+async def test_draining_finishes_inflight_requests_and_retires_connections(tmp_path):
+    started = asyncio.Event()
+    release = asyncio.Event()
+    drain_file = tmp_path / "draining"
+
+    async def backend(_):
+        started.set()
+        await release.wait()
+        return httpx.Response(200, json=RESULT)
+
+    async with gateway(backend, drain_file=drain_file) as (client, _):
+        ready = await client.get("/readyz")
+        assert ready.status_code == 200
+        assert "connection" not in ready.headers
+        pending = asyncio.create_task(client.post("/v1/infer", json=PAYLOAD))
+        try:
+            await asyncio.wait_for(started.wait(), timeout=1)
+            drain_file.touch()
+            assert (await client.get("/readyz")).status_code == 503
+            assert (await client.get("/healthz")).status_code == 200
+        finally:
+            release.set()
+        response = await pending
+        assert response.status_code == 200
+        assert response.json() == {**RESULT, "backend": "primary"}
+        assert response.headers["connection"] == "close"
+        # Continue serving late arrivals during the endpoint propagation window.
+        response = await client.post("/v1/infer", json=PAYLOAD)
+        assert response.status_code == 200
+        assert response.headers["connection"] == "close"
+
+
 async def test_recovered_primary_is_used_after_cooldown():
     broken = True
 

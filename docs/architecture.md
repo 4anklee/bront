@@ -29,6 +29,10 @@ request outcome counter. `/healthz` is liveness only; neither it nor `/status`
 guarantees that a backend will serve the next inference request.
 `/readyz` tracks application lifespan readiness independently of backend health,
 so open circuits do not stop the traffic needed for fallback and recovery.
+In Kubernetes, a preStop hook creates a pod-local drain marker before shutdown.
+The gateway then reports unready and sends `Connection: close` while completing
+requests, allowing clients to reconnect through the Service before the process
+exits. The hook waits ten seconds for endpoint changes and connection retirement.
 
 ## Deliberate starter boundaries
 
@@ -60,10 +64,14 @@ The [local Kubernetes deployment](kubernetes.md) adds Deployments, Services,
 configuration, resource budgets, and health probes, with two gateway replicas.
 Each replica has independent circuit state and metrics.
 
-1. Validate rolling updates and multiple gateway replicas under sustained traffic,
-   accounting for independent circuit state and per-process metrics.
-2. Add recent latency/error windows and evaluate whether latency-aware routing
-   improves measured behavior over primary-first routing.
+The rolling-update verification replaces both gateway pods during sustained
+in-cluster traffic, first with Triton healthy and then held unavailable. It
+checks request outcomes, pod replacement, and rollout timing, then restores
+Triton and checks primary recovery on each replica. See the
+[verification walkthrough](kubernetes.md#verify-rolling-updates-under-traffic).
+
+Next, add recent latency/error windows and evaluate whether latency-aware routing
+improves measured behavior over primary-first routing.
 
 TensorRT-LLM and NeMo remain optional future integrations. No production or
 performance claims are implied by the starter.

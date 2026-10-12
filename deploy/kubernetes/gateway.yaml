@@ -4,6 +4,12 @@ metadata:
     name: gateway
 spec:
     replicas: 2
+    minReadySeconds: 5
+    strategy:
+        type: RollingUpdate
+        rollingUpdate:
+            maxUnavailable: 0
+            maxSurge: 1
     selector:
         matchLabels:
             app: gateway
@@ -17,6 +23,19 @@ spec:
                 - name: gateway
                   image: inference-guard:local
                   imagePullPolicy: IfNotPresent
+                  lifecycle:
+                      preStop:
+                          exec:
+                              # Retire keep-alive connections while endpoint removal propagates.
+                              command:
+                                  - /app/.venv/bin/python
+                                  - -c
+                                  - |
+                                    import os
+                                    import time
+                                    from pathlib import Path
+                                    Path(os.environ["IG_DRAIN_FILE"]).touch()
+                                    time.sleep(10)
                   ports:
                       - name: http
                         containerPort: 8000

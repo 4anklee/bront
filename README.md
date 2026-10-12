@@ -193,7 +193,7 @@ creation are recorded in the job logs.
 | --- | --- |
 | `POST /v1/infer` | Validate inputs and try primary, then fallback; 503 if both fail |
 | `GET /healthz` | Gateway process liveness; does not probe backends |
-| `GET /readyz` | Gateway lifespan readiness; stays ready during backend outages |
+| `GET /readyz` | Gateway readiness; unready while draining, stays ready during backend outages |
 | `GET /status` | Observed circuit states; does not actively check backend health |
 | `GET /metrics` | Prometheus request totals, backend attempt totals and latency |
 | Mock `POST /infer` | Deterministic `double` workload |
@@ -210,6 +210,7 @@ its own values in `compose.yaml`.
 | `IG_REQUEST_TIMEOUT_SECONDS` | `1` per backend attempt |
 | `IG_FAILURE_THRESHOLD` | `3` consecutive failures |
 | `IG_RECOVERY_TIMEOUT_SECONDS` | `10` |
+| `IG_DRAIN_FILE` | Unset locally; Kubernetes uses a pod-local file to signal graceful shutdown |
 
 ## Layout
 
@@ -219,6 +220,7 @@ src/inference_guard/
   backends.py         Ordered backend routing and response validation
   adapters.py         Mock and Triton HTTP protocol translation
   circuit_breaker.py  Closed/open/half-open state machine
+  draining.py         Retire HTTP connections during Kubernetes shutdown
   config.py           Validated environment settings
   metrics.py          Per-app Prometheus registry
   schemas.py          Shared inference request/response contract

@@ -16,3 +16,4 @@ configMapGenerator:
           - IG_REQUEST_TIMEOUT_SECONDS=1
           - IG_FAILURE_THRESHOLD=3
           - IG_RECOVERY_TIMEOUT_SECONDS=10
+          - IG_DRAIN_FILE=/tmp/inferenceguard-draining

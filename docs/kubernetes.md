@@ -133,11 +133,54 @@ kubectl --context kind-inference-guard -n inference-guard logs "job/$benchmark_j
 kubectl --context kind-inference-guard -n inference-guard delete "job/$benchmark_job"
 ```
 
+## Verify rolling updates under traffic
+
+After loading the current `inference-guard:benchmark` image as above, run:
+
+```sh
+uv run --frozen python scripts/verify_rolling_updates.py \
+  --duration 60 --concurrency 20 --output reports/rolling-updates.json
+```
+
+This check creates temporary in-cluster Jobs using the benchmark's existing
+request validator and bounded-concurrency load generator. It runs two experiments:
+
+1. Sustain traffic through `http://gateway:8000`, restart the gateway Deployment,
+   and require all measured requests to succeed through Triton.
+2. Scale Triton to zero, sustain fallback traffic through the same Service,
+   restart the gateway again, and require all measured requests to succeed
+   through fallback.
+
+Each experiment includes five seconds of measured traffic before the restart.
+The check confirms both pod identities changed and that the rollout completed
+before the measured traffic ended. Failures are counted without client retries.
+The JSON report includes counts, latency, errors, per-second traffic summaries,
+up to 100 failed samples, and pod identities and rollout timestamps. Exit code
+`1` indicates failed expectations or an incomplete experiment.
+
+Triton is restored in a `finally` block and primary inference is checked directly
+on **each** replacement gateway pod. Temporary Jobs are removed after each
+experiment. Reported recovery time includes Triton startup and the checks of
+both gateway pods. Run against this local deployment without concurrent deployments or
+fault injection. If the script is forcibly killed, restore Triton with the scale
+command above; temporary Jobs expire automatically after an hour. Gateway pods
+are replaced, so restart any existing port-forward afterward.
+
+The gateway rollout keeps `maxUnavailable: 0` and `maxSurge: 1`, and requires five
+seconds of readiness before retiring a previous pod. Its `preStop` hook creates
+the pod-local `IG_DRAIN_FILE` marker, then waits ten seconds. During that window,
+readiness returns 503 and responses include `Connection: close`, so clients
+finish their requests and reconnect through the Service. The process keeps
+serving late arrivals while endpoint removal propagates. The remaining portion
+of the 30-second termination grace period allows requests to finish. These settings
+are checked with a local workload; a passing run is not a guarantee for every
+network, request duration, or load level.
+
 ## Configuration and health
 
 | Component | CPU request / limit | Memory request / limit | Readiness |
 | --- | --- | --- | --- |
-| Gateway | 100m / 1 | 128 MiB / 256 MiB | `/readyz`: application lifespan initialized |
+| Gateway | 100m / 1 | 128 MiB / 256 MiB | `/readyz`: initialized and not draining |
 | Triton | 1 / 2 | 1 GiB / 2 GiB | Pinned `double` model version `1` is ready |
 | Fallback | 100m / 1 | 128 MiB / 256 MiB | `/healthz`: mock HTTP service is running |
 
@@ -147,7 +190,8 @@ temporarily running two large instances locally; the gateway handles that gap
 through fallback.
 
 Gateway liveness uses `/healthz`. Readiness uses `/readyz`, which returns 503
-outside the initialized application lifespan. Backend failures do not change
+outside the initialized application lifespan or when the pod is draining.
+Backend failures do not change
 gateway readiness: keeping the gateway reachable allows fallback responses and
 traffic-driven circuit recovery. If both backends fail, inference returns 503
 while the gateway stays ready. Readiness is not a guarantee of inference success.

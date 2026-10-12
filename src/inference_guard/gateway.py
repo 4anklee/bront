@@ -33,7 +33,15 @@ def create_app(
 
     @app.get("/status")
     async def status(request: Request) -> dict:
-        return {"backends": request.app.state.router.status()}
+        return {
+            "backends": request.app.state.router.status(),
+            "configuration": {
+                "primary_protocol": settings.primary_protocol,
+                "request_timeout_seconds": settings.request_timeout_seconds,
+                "failure_threshold": settings.failure_threshold,
+                "recovery_timeout_seconds": settings.recovery_timeout_seconds,
+            },
+        }
 
     @app.post("/v1/infer", response_model=InferenceResponse)
     async def infer(payload: InferenceRequest, request: Request) -> InferenceResponse:

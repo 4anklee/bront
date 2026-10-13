@@ -17,8 +17,8 @@ existing services. The package, CLI, and distribution now use the Bront name.
    fixtures, and removal of the superseded gateway-specific experiment commands.
 
 The core workflow is implemented. This establishes a working MVP, not validated
-external demand or a production-performance claim. See the [architecture](../architecture.md)
-and [migration guide](../migration.md) for the current structure.
+external demand or a production-performance claim. See the
+[architecture](../architecture.md) for the current structure.
 
 ## Next: realistic inference and external validation
 

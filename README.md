@@ -65,7 +65,6 @@ rendering succeeds; it does not replace a release gate.
 - [Repeated runs and release comparisons](docs/comparisons.md)
 - [Offline HTML reports](docs/reports.md)
 - [Architecture](docs/architecture.md)
-- [Migration to Bront](docs/migration.md)
 - [Roadmap and remaining validation](docs/proposals/inference-reliability.md)
 
 ## Optional reference deployment

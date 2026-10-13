@@ -204,6 +204,6 @@ outside this first adapter's intended use.
 
 [Reusable fault and rollout scenarios](scenarios.md) now coordinate these same
 workloads with Toxiproxy or Kubernetes, including restoration and recovery checks.
-[Repeated-run comparisons](comparisons.md) are also available. HTML reporting is
-the [next milestone](proposals/inference-reliability.md#delivery-order). The reference
+[Repeated-run comparisons](comparisons.md) are also available. Render run, series, or comparison JSON as
+[offline HTML](reports.md) with `bront report`. The reference
 demo's four-scenario benchmark remains available.

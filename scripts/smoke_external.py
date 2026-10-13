@@ -105,6 +105,39 @@ environment = "smoke"
         )
 
 
+def verify_html_reports() -> None:
+    for name in (
+        "baseline",
+        "incorrect-output",
+        "interrupted",
+        "comparison-baseline",
+        "comparison-pass",
+        "comparison-single-run",
+        "comparison-incompatible",
+    ):
+        output = REPORTS / f"{name}.html"
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "inference_guard.cli",
+                "report",
+                str(REPORTS / f"{name}.json"),
+                "--output",
+                str(output),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=True,
+        )
+        html = output.read_text()
+        assert html.startswith("<!doctype html>")
+        assert "data:application/json;base64," in html
+        assert "<script" not in html
+    print("Offline HTML reports passed: runs, partial series, and comparison verdicts.")
+
+
 def main() -> None:
     with subprocess.Popen(
         [sys.executable, str(ROOT / "examples/http-json/server.py"), "--port", "0"],
@@ -185,6 +218,7 @@ def main() -> None:
                             running.kill()
                         running.wait(timeout=10)
             verify_comparisons(url)
+            verify_html_reports()
             print(
                 "Repeated comparisons passed: compatible, insufficient, and incompatible evidence."
             )

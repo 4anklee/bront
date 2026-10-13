@@ -54,12 +54,18 @@ jobs:
               run: |
                   uv run --frozen bront run examples/scenarios/proxy-outage.toml --output reports/scenarios/proxy-outage.json
                   uv run --frozen bront run examples/scenarios/proxy-delay.toml --output reports/scenarios/proxy-delay.json
+            - name: Render scenario HTML
+              if: always() && hashFiles('reports/scenarios/*.json') != ''
+              run: |
+                  for source in reports/scenarios/*.json; do
+                    uv run --frozen bront report "$source" --output "${source%.json}.html"
+                  done
             - name: Upload scenario reports
               if: always() && hashFiles('reports/scenarios/*.json') != ''
               uses: actions/upload-artifact@v7
               with:
                   name: scenario-reports
-                  path: reports/scenarios/*.json
+                  path: reports/scenarios/
                   if-no-files-found: error
                   retention-days: 14
             - name: Upload benchmark report
@@ -87,7 +93,7 @@ jobs:
                   version: "0.11.21"
                   enable-cache: true
             - run: uv sync --frozen
-            - name: Verify HTTP runs, repeated comparisons, and interruption handling
+            - name: Verify HTTP runs, comparisons, interruption handling, and HTML reports
               run: uv run --frozen python scripts/smoke_external.py
             - name: Upload external endpoint reports
               if: always() && hashFiles('reports/external/*.json') != ''

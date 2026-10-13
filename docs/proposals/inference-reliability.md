@@ -1,8 +1,8 @@
 # Proposal: inference reliability and release validation
 
-Status: milestones 1–3 implemented, remaining milestones proposed, 2026-10-12.
+Status: milestones 1–4 implemented, remaining milestones proposed, 2026-10-12.
 Working name: **Bront**. `bront run`, reusable scenarios, and `bront compare` are
-available. HTML report rendering remains a proposed interface. See the
+available alongside offline HTML reports via `bront report`. See the
 [external endpoint guide](../external-endpoints.md) for the implemented contract.
 The repository and Python package retain their existing names; `bront` is an
 additional CLI entry point alongside `inferenceguard`.
@@ -58,10 +58,10 @@ Proposed commands, introduced incrementally:
 bront run suite.toml --output reports/baseline.json
 bront run suite.toml --url http://candidate:8000/predict --output reports/candidate.json
 bront compare reports/baseline.json reports/candidate.json --policy limits.toml
-bront report reports/candidate.json --baseline reports/baseline.json --output reports/review.html
+bront report reports/comparison.json --output reports/review.html
 ```
 
-The run and compare commands are implemented. HTML reporting follows later. Kubernetes, Prometheus, Triton, and the reference gateway are optional
+The run, compare, and report commands are implemented. Kubernetes, Prometheus, Triton, and the reference gateway are optional
 unless a selected adapter or scenario requires them.
 
 ## Milestone 1: test an external HTTP endpoint
@@ -205,6 +205,13 @@ Exit codes: 0 for completed passing assertions, 1 for completed failing assertio
 Preserve the conventional interrupt status for cancellation and write its report.
 
 ## Milestone 4: reports people can review
+
+Implemented with offline HTML views for run schema 3, series schema 1, and comparison
+schema 1. Reports contain per-window traffic, aligned scenario events, assertions,
+recovery definitions, declared configuration, and embedded downloadable JSON.
+See the [report guide](../reports.md). Rendering consumes the comparison artifact
+instead of introducing a second comparison policy via a `--baseline` option.
+JUnit output remains optional future work; HTML and JSON artifacts are uploaded by CI.
 
 Generate a self-contained HTML report and JSON evidence, with an optional JUnit
 summary for CI. Show the experiment configuration, event timeline, correctness

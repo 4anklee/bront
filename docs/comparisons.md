@@ -244,6 +244,16 @@ comparison results. Run the same check locally with:
 uv run python scripts/smoke_external.py
 ```
 
+Render the saved comparison for review:
+
+```sh
+uv run bront report reports/comparison.json --output reports/comparison.html
+```
+
+The [HTML report](reports.md) preserves the recorded verdict and includes the
+comparison JSON. Render the individual runs or series separately for request and
+scenario timelines; comparison JSON does not embed source samples.
+
 Keep generated artifacts out of Git. Share the artifact bundle or a curated
 experiment containing commands, configuration, hardware, and the measured limits
 of the conclusions.

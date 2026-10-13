@@ -1,4 +1,4 @@
-"""Atomic JSON artifact output shared by runs, series, and comparisons."""
+"""Atomic UTF-8 artifact output shared by JSON evidence and HTML reports."""
 
 import json
 import os
@@ -9,14 +9,21 @@ from pydantic import BaseModel
 
 
 def write_artifact(report: BaseModel, path: Path) -> None:
-    """Atomic replacement avoids presenting a partially serialized report as evidence."""
+    write_text_artifact(
+        json.dumps(report.model_dump(mode="json"), indent=2, allow_nan=False) + "\n", path
+    )
+
+
+def write_text_artifact(content: str, path: Path) -> None:
+    """Atomic replacement avoids presenting a partially written artifact as evidence."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
-        with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as stream:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=path.parent, delete=False
+        ) as stream:
             temporary = Path(stream.name)
-            json.dump(report.model_dump(mode="json"), stream, indent=2, allow_nan=False)
-            stream.write("\n")
+            stream.write(content)
         os.replace(temporary, path)
     finally:
         if temporary is not None:

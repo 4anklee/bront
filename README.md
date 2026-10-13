@@ -25,7 +25,14 @@ Reports record lifecycle timing, restoration, and service/preferred-backend reco
 Collect repeated runs with `--repeat 3`, then use
 [`bront compare`](docs/comparisons.md) to check compatibility, release assertions,
 and declared regression limits. Missing context or noisy evidence cannot pass.
-HTML reports follow in the [implementation proposal](docs/proposals/inference-reliability.md).
+Render runs, repeated-run manifests, or comparison artifacts as
+[self-contained HTML](docs/reports.md), including downloadable JSON evidence:
+
+```sh
+uv run bront report reports/baseline.json --output reports/review.html
+```
+
+Open `reports/review.html` in a browser; it works offline.
 
 The repository, Python distribution, and import package keep their existing names
 for now. `inferenceguard` remains available alongside the `bront` command.
@@ -300,6 +307,8 @@ src/inference_guard/
   checks.py           Shared release assertions and recovery/overlap checks
   evidence.py         Artifact integrity and execution-completeness validation
   comparisons.py      Compatibility, variation, and regression verdicts
+  html_reports.py     Offline HTML views, timelines, and embedded JSON evidence
+  report_cli.py       Artifact rendering command
   comparison_models.py  Comparison policies and report contract
   compare_cli.py      Baseline/candidate comparison command
   artifacts.py        Shared atomic JSON output

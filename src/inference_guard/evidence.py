@@ -54,6 +54,8 @@ def check_phase(phase: Phase, names: list[str]) -> None:
             raise ValueError("invalid_sample_timing")
         if sample.error is None and sample.status_code is None:
             raise ValueError("successful_sample_missing_status")
+    if phase == Phase():
+        return  # Initial running snapshots precede the first summary calculation.
     recalculated = phase.model_copy(deep=True)
     recalculated.summarize()
     if recalculated.model_dump(exclude={"samples"}) != phase.model_dump(exclude={"samples"}):

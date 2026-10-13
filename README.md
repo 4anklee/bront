@@ -1,7 +1,34 @@
-# InferenceGuard
+# Bront — reliability tests for inference deployments
 
-A Python/FastAPI starter for an inference gateway that routes requests to a
-compatible fallback when a backend fails or times out.
+Bront is the working name for this project's pivot from a failover gateway demo
+to a tool for validating inference endpoints. The first milestone is available:
+`bront run` checks an external HTTP JSON service against repeatable input cases,
+output assertions, and latency/error limits, then saves a JSON report for CI.
+
+```sh
+uv sync --frozen
+uv run python examples/http-json/server.py
+```
+
+In another terminal:
+
+```sh
+uv run bront run examples/http-json/suite.toml --output reports/baseline.json
+```
+
+Start with the [external endpoint guide](docs/external-endpoints.md) to configure
+your own request bodies, expected outputs, credentials, and sustained traffic.
+This workflow needs no gateway, Docker, Kubernetes, or backend-specific status API.
+Reusable fault scenarios, comparisons, and HTML reports follow in the
+[implementation proposal](docs/proposals/inference-reliability.md).
+
+The repository, Python distribution, and import package keep their existing names
+for now. `inferenceguard` remains available alongside the `bront` command.
+
+## Reference deployment
+
+The existing gateway and its deployment examples remain a test fixture for
+failover, faults, and rolling updates.
 
 The default workload is **two mock services**, each doubling a list of numbers.
 An alternative stack runs **NVIDIA Triton with an ONNX model on CPU** as primary,
@@ -9,8 +36,8 @@ preserving the same inputs and outputs through the mock fallback. Follow the
 [Triton walkthrough](docs/triton.md) to run it and verify outage recovery.
 The benchmark CLI measures baseline, outage, slow-backend, and recovery scenarios.
 A [local Kubernetes deployment](docs/kubernetes.md) runs the gateway, Triton, and
-fallback with resource budgets and health probes. Trained AI models and
-latency-aware routing remain future work.
+fallback with resource budgets and health probes. A trained-model example remains
+a later milestone; adaptive routing is outside the current product scope.
 The optional [Kubernetes dashboard](docs/observability.md) compares request success,
 fallback usage, latency, circuit state, and recovery across individual gateway pods.
 
@@ -256,8 +283,15 @@ src/inference_guard/
   metrics.py          Per-app Prometheus registry
   schemas.py          Shared inference request/response contract
   mock_backend.py     Deterministic workload and fault injection
-  cli.py              Typer benchmark command and result table
-  benchmark.py        Concurrent measurements and scenario checks
+  cli.py              CLI entry point and reference demo commands
+  run_cli.py          External endpoint run command
+  suites.py           TOML suites, JSONL cases, and credential preflight
+  targets.py          Generic HTTP JSON adapter
+  validation.py       JSON Pointer assertions and numeric tolerances
+  runs.py             External workload execution and cancellation handling
+  results.py          Versioned external run reports
+  measurement.py      Shared concurrency scheduling and percentiles
+  benchmark.py        Reference gateway benchmark and scenario checks
   faults.py           Toxiproxy fault injection and cleanup
 tests/                Routing, deadlines, recovery, validation and mock tests
 deploy/prometheus/    Optional scrape configuration
@@ -272,12 +306,15 @@ docs/architecture.md  Design boundaries and next implementation steps
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
+uv run ty check
 ```
 
 CI runs these checks plus type checking, builds and starts the Compose services,
 and runs the smoke check. A separate benchmark job runs all four scenarios and
-uploads its JSON report. Both jobs clean up their containers. Dependencies are locked in
-`uv.lock`. See [architecture notes](docs/architecture.md) for reliability semantics
+uploads its JSON report. Both jobs clean up their containers. An independent
+external-endpoint job verifies passing, incorrect-output, and interrupted runs
+against the standalone HTTP server and uploads their reports. Dependencies are
+locked in `uv.lock`. See [architecture notes](docs/architecture.md) for reliability semantics
 and the path to a real inference workload.
 
 MIT licensed.

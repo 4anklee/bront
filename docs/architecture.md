@@ -1,4 +1,11 @@
-# Architecture and next steps
+# Reference gateway architecture
+
+The gateway is now a reference deployment for Bront's inference reliability
+experiments. The [external endpoint runner](external-endpoints.md) uses separate
+suite, adapter, validation, and report models; only traffic scheduling and
+percentile calculation are shared with the demo benchmark. It has no dependency
+on gateway-specific HTTP APIs. The [product proposal](proposals/inference-reliability.md)
+defines the next milestones. The remainder of this document describes the gateway.
 
 The [topology diagram](../README.md) shows the current Kubernetes deployment:
 a Service selects either gateway pod, each with its own breakers and counters.
@@ -74,7 +81,7 @@ exits. The hook waits ten seconds for endpoint changes and connection retirement
 - The gateway trusts configured backends. Response byte limits and inbound body
   limits should be added before exposing it to untrusted traffic.
 
-## Suggested implementation order
+## Implemented reference workflows
 
 The mock and Triton adapters now share the existing circuit breaker and routing
 logic. Triton model version `1` is pinned in both the adapter and model repository
@@ -96,8 +103,7 @@ checks request outcomes, pod replacement, and rollout timing, then restores
 Triton and checks primary recovery on each replica. See the
 [verification walkthrough](kubernetes.md#verify-rolling-updates-under-traffic).
 
-Next, add recent latency/error windows and evaluate whether latency-aware routing
-improves measured behavior over primary-first routing.
-
-TensorRT-LLM and NeMo remain optional future integrations. No production or
-performance claims are implied by the starter.
+The next product work is reusable failure scenarios, release assertions and
+comparisons, and shareable reports. Adaptive routing and additional serving
+frameworks are outside the initial scope. No production or performance claims
+are implied by this reference deployment.

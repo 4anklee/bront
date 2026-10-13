@@ -1,12 +1,10 @@
 """Bounded-concurrency HTTP measurements and reproducible fault scenarios."""
 
 import asyncio
-import math
 from collections import Counter
 from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import StrEnum
-from itertools import count as counter
 from time import monotonic
 from typing import Literal, Self
 
@@ -14,6 +12,9 @@ import httpx
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
 from inference_guard.faults import FaultController
+from inference_guard.measurement import drive_load
+from inference_guard.measurement import percentile as percentile
+from inference_guard.schemas import GatewayConfiguration as GatewayConfiguration
 from inference_guard.schemas import InferenceResponse
 
 PAYLOAD: dict[str, object] = {"model": "double", "inputs": [1.0, 2.0, 3.0]}
@@ -48,13 +49,6 @@ class BenchmarkConfig(BaseModel):
         if self.duration_seconds is None and self.requests is None:
             self.requests = 100
         return self
-
-
-class GatewayConfiguration(BaseModel):
-    primary_protocol: Literal["mock", "triton"]
-    request_timeout_seconds: float = Field(gt=0)
-    failure_threshold: int = Field(ge=1)
-    recovery_timeout_seconds: float = Field(gt=0)
 
 
 class Sample(BaseModel):
@@ -93,14 +87,6 @@ class BenchmarkReport(BaseModel):
     payload: dict[str, object] = Field(default_factory=lambda: dict(PAYLOAD))
     phases: list[PhaseResult]
     passed: bool
-
-
-def percentile(values: list[float], percent: float) -> float:
-    """Nearest-rank percentile; the observed maximum is p100."""
-    if not values:
-        return 0.0
-    ordered = sorted(values)
-    return ordered[max(0, math.ceil(percent / 100 * len(ordered)) - 1)]
 
 
 def summarize(scenario: Scenario, samples: list[Sample], elapsed: float) -> PhaseResult:
@@ -174,34 +160,19 @@ class BenchmarkRunner:
         *,
         duration_seconds: float | None = None,
     ) -> PhaseResult:
-        if (count is None) == (duration_seconds is None):
-            raise ValueError("Specify exactly one request count or duration")
-        started = monotonic() if origin is None else origin
-        deadline = started + duration_seconds if duration_seconds is not None else None
-        indices = iter(range(count)) if count is not None else counter()
         samples: list[Sample] = []
-
-        async def worker() -> None:
-            # No await between obtaining an index and owning it; only C tasks are created.
-            for index in indices:
-                if deadline is not None and monotonic() >= deadline:
-                    break
-                samples.append(await self.request(index, started))
-                # Yield even when a transport fails immediately, so other workers
-                # and cancellation continue to run during sustained traffic.
-                await asyncio.sleep(0)
-
-        async with asyncio.TaskGroup() as group:
-            workers = (
-                min(self.config.concurrency, count)
-                if count is not None
-                else self.config.concurrency
-            )
-            for _ in range(workers):
-                group.create_task(worker())
+        result = await drive_load(
+            self.request,
+            concurrency=self.config.concurrency,
+            count=count,
+            duration_seconds=duration_seconds,
+            origin=origin,
+            record=samples.append,
+            clock=monotonic,
+        )
         if not samples:
             raise RuntimeError("No requests were measured; increase --duration")
-        return summarize(scenario, sorted(samples, key=lambda s: s.index), monotonic() - started)
+        return summarize(scenario, sorted(samples, key=lambda s: s.index), result.elapsed_seconds)
 
     async def measure(self, scenario: Scenario, origin: float | None = None) -> PhaseResult:
         return await self.load(

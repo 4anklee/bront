@@ -10,9 +10,8 @@ import httpx
 from pydantic import BaseModel, Field
 
 from inference_guard.adapters import MockAdapter, TritonAdapter
-from inference_guard.benchmark import GatewayConfiguration
 from inference_guard.faults import FaultController
-from inference_guard.schemas import InferenceRequest
+from inference_guard.schemas import GatewayConfiguration, InferenceRequest
 
 DEMO_TOXIC = "inferenceguard-demo-latency"
 

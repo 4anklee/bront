@@ -1,0 +1,1 @@
+{"name":"double","body":{"model":"double","inputs":[1,2,3]},"expect":{"json":[{"pointer":"/model","equals":"double"},{"pointer":"/outputs","equals":[2,4,6]}]}}

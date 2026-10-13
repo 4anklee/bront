@@ -19,3 +19,10 @@ class BackendResponse(BaseModel):
 
 class InferenceResponse(BackendResponse):
     backend: str
+
+
+class GatewayConfiguration(BaseModel):
+    primary_protocol: Literal["mock", "triton"]
+    request_timeout_seconds: float = Field(gt=0)
+    failure_threshold: int = Field(ge=1)
+    recovery_timeout_seconds: float = Field(gt=0)

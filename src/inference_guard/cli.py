@@ -15,8 +15,10 @@ from rich.table import Table
 
 from inference_guard.benchmark import BenchmarkConfig, BenchmarkReport, Scenario, run_benchmark
 from inference_guard.controls import FaultAction, control_fault, inspect_status
+from inference_guard.run_cli import run
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
+app.command()(run)
 
 
 @app.callback()

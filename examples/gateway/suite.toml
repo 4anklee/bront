@@ -1,0 +1,16 @@
+version = 1
+
+[target]
+url = "http://127.0.0.1:8000/v1/infer"
+
+[target.backend]
+pointer = "/backend"
+
+[workload]
+cases = "cases.jsonl"
+requests = 30
+concurrency = 4
+request_timeout_seconds = 5
+
+[assertions]
+max_failed_requests = 0

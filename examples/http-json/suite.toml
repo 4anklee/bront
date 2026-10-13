@@ -1,0 +1,16 @@
+version = 1
+
+[target]
+adapter = "http-json"
+url = "http://127.0.0.1:9000/predict"
+method = "POST"
+
+[workload]
+cases = "cases.jsonl"
+requests = 30
+concurrency = 4
+warmup_requests = 2
+request_timeout_seconds = 2
+
+[assertions]
+max_failed_requests = 0

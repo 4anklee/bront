@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "inference-guard"
 version = "0.1.0"
-description = "A reliability gateway for compatible inference backends"
+description = "Validate and measure inference endpoints, with a reference failover gateway"
 readme = "README.md"
 requires-python = ">=3.14"
 license = "MIT"
@@ -21,6 +21,7 @@ dependencies = [
 ]
 
 [project.scripts]
+bront = "inference_guard.cli:app"
 inferenceguard = "inference_guard.cli:app"
 
 [dependency-groups]

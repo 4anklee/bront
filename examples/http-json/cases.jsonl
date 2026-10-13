@@ -1,0 +1,3 @@
+{"name":"positive","body":{"features":[1,2,3]},"expect":{"status":200,"json":[{"pointer":"/prediction","equals":6}]}}
+{"name":"fractional","body":{"features":[0.1,0.2]},"expect":{"json":[{"pointer":"/prediction","equals":0.3,"abs_tol":0.000001}]}}
+{"name":"negative","body":{"features":[-4,2]},"expect":{"json":[{"pointer":"/prediction","equals":-2}]}}

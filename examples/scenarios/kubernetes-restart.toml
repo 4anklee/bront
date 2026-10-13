@@ -1,0 +1,25 @@
+version = 1
+
+[target]
+# kubectl proxy --context kind-inference-guard --port 18080
+# API-server Service proxy reaches endpoints independently of the restarted pods.
+url = "http://127.0.0.1:18080/api/v1/namespaces/inference-guard/services/gateway:8000/proxy/v1/infer"
+
+[workload]
+cases = "../gateway/cases.jsonl"
+duration_seconds = 60
+concurrency = 4
+warmup_requests = 4
+request_timeout_seconds = 5
+
+[scenario]
+kind = "kubernetes-restart"
+context = "kind-inference-guard"
+namespace = "inference-guard"
+deployment = "gateway"
+expected_replicas = 2
+at_seconds = 3
+observe_timeout_seconds = 45
+
+[assertions]
+max_failed_requests = 0

@@ -1,7 +1,7 @@
 # Bront — reliability tests for inference deployments
 
 Bront is the working name for this project's pivot from a failover gateway demo
-to a tool for validating inference endpoints. The first milestone is available:
+to a tool for validating inference endpoints. External endpoint testing and reusable fault scenarios are available:
 `bront run` checks an external HTTP JSON service against repeatable input cases,
 output assertions, and latency/error limits, then saves a JSON report for CI.
 
@@ -19,7 +19,10 @@ uv run bront run examples/http-json/suite.toml --output reports/baseline.json
 Start with the [external endpoint guide](docs/external-endpoints.md) to configure
 your own request bodies, expected outputs, credentials, and sustained traffic.
 This workflow needs no gateway, Docker, Kubernetes, or backend-specific status API.
-Reusable fault scenarios, comparisons, and HTML reports follow in the
+Add a [scenario](docs/scenarios.md) to inject a proxy outage or delay, scale a
+Kubernetes backend to zero, or restart a Deployment under sustained traffic.
+Reports record lifecycle timing, restoration, and service/preferred-backend recovery.
+Comparisons and HTML reports follow in the
 [implementation proposal](docs/proposals/inference-reliability.md).
 
 The repository, Python distribution, and import package keep their existing names
@@ -290,6 +293,10 @@ src/inference_guard/
   validation.py       JSON Pointer assertions and numeric tolerances
   runs.py             External workload execution and cancellation handling
   results.py          Versioned external run reports
+  scenarios.py        Concurrent scenario lifecycle, cleanup, and recovery evidence
+  scenario_models.py  Scenario configuration and event contracts
+  proxy_scenarios.py   Named Toxiproxy outage/delay driver
+  kubernetes_scenarios.py  Scoped Deployment mutation and replacement checks
   measurement.py      Shared concurrency scheduling and percentiles
   benchmark.py        Reference gateway benchmark and scenario checks
   faults.py           Toxiproxy fault injection and cleanup

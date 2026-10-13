@@ -171,7 +171,7 @@ only of status if no JSON assertions were declared.
 
 ## Reports and limits
 
-Reports identify themselves with `report_type: "bront.run"` and `schema_version: 1`.
+Reports identify themselves with `report_type: "bront.run"` and `schema_version: 2`.
 They are separate from the demo benchmark's schema-v2 reports. The default output
 is `reports/run.json`; supply a distinct `--output` to retain each run. Reports
 are replaced atomically. The destination is checked before traffic, and it cannot
@@ -200,6 +200,8 @@ requests, a 300-second timeout, 10,000 cases, a 1 MiB suite, and a 16 MiB cases 
 Response bodies are buffered; streaming responses and very large outputs are
 outside this first adapter's intended use.
 
-Reusable faults and rollouts, report comparisons, and HTML reporting are the
-[next milestones](proposals/inference-reliability.md#delivery-order). The existing
-reference demo's four-scenario benchmark remains available in the meantime.
+[Reusable fault and rollout scenarios](scenarios.md) now coordinate these same
+workloads with Toxiproxy or Kubernetes, including restoration and recovery checks.
+Report comparisons and HTML reporting are the
+[next milestones](proposals/inference-reliability.md#delivery-order). The reference
+demo's four-scenario benchmark remains available.

@@ -213,8 +213,13 @@ async def test_all_scenarios_against_gateway_restore_faults_and_report_recovery(
         assert report.phases[2].fallback_requests == 8
         recovery = report.phases[3]
         assert recovery.recovery_seconds is not None
-        assert 0.02 <= recovery.recovery_seconds < 1
-        assert recovery.recovery_probes
+        # Cooldown starts when the circuit opens, before the fault is removed.
+        # Recovery may be observed in measured traffic or in the later probes.
+        assert 0 <= recovery.recovery_seconds < 1
+        assert any(
+            sample.backend == "primary" and sample.error is None
+            for sample in recovery.samples + recovery.recovery_probes
+        )
         assert len(recovery.samples) == 8  # recovery probes stay outside measured counts
         await faults.preflight()  # enabled, no remaining toxics
 

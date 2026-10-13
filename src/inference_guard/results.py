@@ -11,6 +11,7 @@ from typing import Literal
 from pydantic import Field, JsonValue
 
 from inference_guard.measurement import percentile
+from inference_guard.scenario_models import ScenarioEvidence
 from inference_guard.validation import StrictModel
 
 
@@ -62,13 +63,13 @@ class Phase(StrictModel):
 class AssertionResult(StrictModel):
     name: str
     passed: bool
-    actual: float
+    actual: float | None
     limit: float
 
 
 class RunReport(StrictModel):
     report_type: Literal["bront.run"] = "bront.run"
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     started_at: str = Field(default_factory=timestamp)
     finished_at: str | None = None
     status: Literal["running", "passed", "failed", "error", "cancelled"] = "running"
@@ -79,6 +80,7 @@ class RunReport(StrictModel):
     warmup: Phase = Field(default_factory=Phase)
     measurement: Phase = Field(default_factory=Phase)
     assertions: list[AssertionResult] = Field(default_factory=list)
+    scenario: ScenarioEvidence | None = None
 
 
 def write_report(report: RunReport, path: Path) -> None:

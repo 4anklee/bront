@@ -1,4 +1,4 @@
-"""Baseline experiments against external endpoints, with partial evidence on cancellation."""
+"""External endpoint experiments, with bounded scenarios and partial evidence."""
 
 import asyncio
 from pathlib import Path
@@ -15,6 +15,7 @@ from inference_guard.results import (
     timestamp,
     write_report,
 )
+from inference_guard.scenarios import ScenarioSession, failure_code
 from inference_guard.suites import LoadedSuite, SuiteError
 from inference_guard.targets import HttpJsonTarget
 
@@ -34,6 +35,7 @@ async def run_suite(
     loaded: LoadedSuite,
     output: Path,
     transport: httpx.AsyncBaseTransport | None = None,
+    control_transport: httpx.AsyncBaseTransport | None = None,
 ) -> RunReport:
     if await asyncio.to_thread(output.resolve) in (loaded.source, loaded.cases_path):
         raise SuiteError("Report output must not overwrite the suite or its input cases")
@@ -46,7 +48,16 @@ async def run_suite(
         keepalive_expiry=2,
     )
     await asyncio.to_thread(write_report, report, output)  # Check output before any network calls.
+    session = None
     try:
+        if loaded.suite.scenario is not None:
+            session = ScenarioSession(
+                loaded.suite.scenario,
+                transport=control_transport,
+                require_identity=loaded.suite.assertions.preferred_backend is not None,
+            )
+            report.scenario = session.evidence
+            await session.preflight()
         async with httpx.AsyncClient(
             timeout=workload.request_timeout_seconds,
             limits=limits,
@@ -90,7 +101,7 @@ async def run_suite(
                         sample.duration_ms = (monotonic() - started) * 1000
                     return sample
 
-                try:
+                async def load():
                     return await drive_load(
                         request,
                         concurrency=workload.concurrency,
@@ -99,6 +110,11 @@ async def run_suite(
                         origin=phase_origin,
                         max_samples=workload.max_samples if phase is report.measurement else None,
                     )
+
+                try:
+                    if session is not None and phase is report.measurement:
+                        return await session.measure(load, phase_origin, phase)
+                    return await load()
                 finally:
                     phase.elapsed_seconds = monotonic() - phase_origin
                     phase.summarize()
@@ -136,6 +152,12 @@ async def run_suite(
                             passed=p95 <= policy.max_p95_ms,
                         )
                     )
+                if session is not None:
+                    report.assertions.extend(
+                        session.recovery(
+                            report.measurement, policy, loaded.suite.target.backend is not None
+                        )
+                    )
                 report.status = "passed" if all(a.passed for a in report.assertions) else "failed"
     except asyncio.CancelledError:
         report.status = "cancelled"
@@ -144,10 +166,35 @@ async def run_suite(
     except Exception as exc:
         # Exception strings can contain URLs, credentials, or response bodies.
         report.status = "error"
-        report.reason = f"execution_error:{type(exc).__name__}"
+        report.reason = f"execution_error:{failure_code(exc)}"
     finally:
-        report.finished_at = timestamp()
-        report.warmup.summarize()
-        report.measurement.summarize()
-        await asyncio.to_thread(write_report, report, output)
+
+        async def finalize() -> None:
+            if session is not None:
+                try:
+                    if not await session.cleanup():
+                        report.status = "error"
+                        report.reason = "scenario_cleanup_failed"
+                finally:
+                    try:
+                        await session.close()
+                    except Exception:
+                        report.status = "error"
+                        report.reason = "scenario_control_close_failed"
+            report.finished_at = timestamp()
+            report.warmup.summarize()
+            report.measurement.summarize()
+            await asyncio.to_thread(write_report, report, output)
+
+        # A first interrupt during finalization must not abandon an owned fault.
+        finalization = asyncio.create_task(finalize())
+        try:
+            await asyncio.shield(finalization)
+        except asyncio.CancelledError:
+            if report.status != "error":
+                report.status = "cancelled"
+                report.reason = "interrupted"
+            await finalization
+            await asyncio.to_thread(write_report, report, output)
+            raise
     return report

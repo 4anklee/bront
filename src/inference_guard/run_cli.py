@@ -46,6 +46,8 @@ def run(
             f"{measured.requests_per_second:.1f} req/s; p95 {latency}"
         )
         console.print(f"Errors: {measured.errors}; warmup: {report.warmup.requests} requests")
+        if report.scenario is not None:
+            console.print(f"Scenario: {report.scenario.kind}; cleanup: {report.scenario.cleanup}")
         if report.reason:
             console.print(f"Reason: {report.reason}")
         console.print(f"Report: {output}")

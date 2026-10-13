@@ -1,0 +1,26 @@
+version = 1
+
+[target]
+url = "http://127.0.0.1:8000/v1/infer"
+[target.backend]
+pointer = "/backend"
+
+[workload]
+cases = "../gateway/cases.jsonl"
+duration_seconds = 20
+concurrency = 4
+warmup_requests = 4
+request_timeout_seconds = 3
+
+[scenario]
+kind = "proxy-outage"
+url = "http://127.0.0.1:18474"
+proxy = "primary"
+at_seconds = 2
+hold_seconds = 3
+
+[assertions]
+max_failed_requests = 0
+recovery_within_seconds = 3
+preferred_backend = "primary"
+preferred_backend_within_seconds = 12

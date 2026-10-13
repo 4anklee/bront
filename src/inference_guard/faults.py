@@ -1,4 +1,4 @@
-"""Controls only the benchmark proxy; never stops the inference service."""
+"""Scoped Toxiproxy operations shared by demo controls and external scenarios."""
 
 import asyncio
 from uuid import uuid4
@@ -8,10 +8,15 @@ import httpx
 
 class FaultController:
     def __init__(
-        self, client: httpx.AsyncClient, url: str, *, toxic_name: str | None = None
+        self,
+        client: httpx.AsyncClient,
+        url: str,
+        *,
+        toxic_name: str | None = None,
+        proxy: str = "primary",
     ) -> None:
         self.client = client
-        self.url = url.rstrip("/") + "/proxies/primary"
+        self.url = url.rstrip("/") + "/proxies/" + proxy
         self.toxic_name = toxic_name or "inferenceguard-" + uuid4().hex
         self.disabled = False
         self.delayed = False

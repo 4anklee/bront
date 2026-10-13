@@ -12,6 +12,7 @@ from typing import Literal, Self
 import httpx
 from pydantic import Field, HttpUrl, JsonValue, ValidationError, field_validator, model_validator
 
+from inference_guard.scenario_models import KubernetesRestart, ScenarioConfig
 from inference_guard.validation import (
     JsonCheck,
     StrictModel,
@@ -87,6 +88,9 @@ class Workload(StrictModel):
 class Assertions(StrictModel):
     max_failed_requests: int = Field(default=0, ge=0)
     max_p95_ms: float | None = Field(default=None, gt=0)
+    recovery_within_seconds: float | None = Field(default=None, gt=0)
+    preferred_backend: str | None = Field(default=None, min_length=1, max_length=128)
+    preferred_backend_within_seconds: float | None = Field(default=None, gt=0)
 
 
 class Suite(StrictModel):
@@ -94,6 +98,27 @@ class Suite(StrictModel):
     target: Target
     workload: Workload
     assertions: Assertions = Field(default_factory=Assertions)
+    scenario: ScenarioConfig | None = None
+
+    @model_validator(mode="after")
+    def scenario_contract(self) -> Self:
+        scenario = self.scenario
+        policy = self.assertions
+        if scenario is not None:
+            duration = self.workload.duration_seconds
+            if duration is None:
+                raise ValueError("Scenarios require a duration workload")
+            hold = 0 if isinstance(scenario, KubernetesRestart) else scenario.hold_seconds
+            if scenario.at_seconds + hold >= duration:
+                raise ValueError("Leave measured traffic before and after the scenario")
+        if (policy.preferred_backend is None) != (policy.preferred_backend_within_seconds is None):
+            raise ValueError("Preferred backend requires its recovery deadline")
+        if policy.preferred_backend is not None and self.target.backend is None:
+            raise ValueError("Preferred-backend recovery requires identity extraction")
+        if policy.recovery_within_seconds is not None or policy.preferred_backend is not None:
+            if scenario is None or isinstance(scenario, KubernetesRestart):
+                raise ValueError("Recovery assertions require a reversible fault scenario")
+        return self
 
 
 class Expectations(StrictModel):

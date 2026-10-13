@@ -1,8 +1,8 @@
 # Proposal: inference reliability and release validation
 
-Status: milestone 1 implemented, remaining milestones proposed, 2026-10-12.
-Working name: **Bront**. `bront run` is available; comparison, report rendering,
-and reusable scenarios below remain proposed interfaces. See the
+Status: milestones 1–2 implemented, remaining milestones proposed, 2026-10-12.
+Working name: **Bront**. `bront run` and reusable scenarios are available.
+Comparison and report rendering below remain proposed interfaces. See the
 [external endpoint guide](../external-endpoints.md) for the implemented contract.
 The repository and Python package retain their existing names; `bront` is an
 additional CLI entry point alongside `inferenceguard`.
@@ -144,6 +144,10 @@ not model quality in general. A trained-model example follows in milestone 5.
    its termination reason. Incomplete execution cannot produce a passing verdict.
 
 ## Milestone 2: reusable fault and rollout scenarios
+
+Implemented with four drivers, bounded lifecycle events, restoration, and distinct
+service/preferred-backend recovery checks. See the [scenario guide](../scenarios.md)
+for examples, timing definitions, concurrency limitations, and report schema 2.
 
 Move the existing Toxiproxy and Kubernetes orchestration into scenario drivers.
 A driver declares capabilities and provides preflight, apply, observe, and restore

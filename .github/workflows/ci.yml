@@ -50,6 +50,18 @@ jobs:
                   --gateway-url http://127.0.0.1:8000
                   --toxiproxy-url http://127.0.0.1:18474
                   --output reports/benchmark-ci.json
+            - name: Run reusable proxy scenarios
+              run: |
+                  uv run --frozen bront run examples/scenarios/proxy-outage.toml --output reports/scenarios/proxy-outage.json
+                  uv run --frozen bront run examples/scenarios/proxy-delay.toml --output reports/scenarios/proxy-delay.json
+            - name: Upload scenario reports
+              if: always() && hashFiles('reports/scenarios/*.json') != ''
+              uses: actions/upload-artifact@v7
+              with:
+                  name: scenario-reports
+                  path: reports/scenarios/*.json
+                  if-no-files-found: error
+                  retention-days: 14
             - name: Upload benchmark report
               if: always() && hashFiles('reports/benchmark-ci.json') != ''
               uses: actions/upload-artifact@v7

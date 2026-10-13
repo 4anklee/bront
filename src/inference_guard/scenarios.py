@@ -7,6 +7,7 @@ from typing import Protocol
 
 import httpx
 
+from inference_guard.checks import evaluate_recovery, observe_recovery, traffic_windows
 from inference_guard.kubernetes_scenarios import KubernetesDriver
 from inference_guard.measurement import LoadResult
 from inference_guard.proxy_scenarios import ProxyDriver
@@ -15,7 +16,6 @@ from inference_guard.scenario_models import (
     KubernetesRestart,
     ProxyDelay,
     ProxyOutage,
-    RecoveryEvidence,
     ScenarioConfig,
     ScenarioError,
     ScenarioEvent,
@@ -166,27 +166,7 @@ class ScenarioSession:
         return task.result()
 
     def verify_overlap(self, phase: Phase) -> None:
-        applied = next(e for e in self.evidence.events if e.action == "apply")
-        terminal = next(
-            e
-            for e in self.evidence.events
-            if e.action == ("restored" if self.driver.reversible else "observed")
-        )
-        end = terminal.finished_ms
-        assert end is not None and applied.finished_ms is not None
-        during_start = applied.finished_ms
-        during_end = end
-        if self.driver.reversible:
-            observed = next(e for e in self.evidence.events if e.action == "observed")
-            restore = next(e for e in self.evidence.events if e.action == "restore")
-            assert observed.finished_ms is not None
-            during_start, during_end = observed.finished_ms, restore.started_ms
-        starts = [s.started_ms for s in phase.samples]
-        windows = {
-            "before": sum(start < applied.started_ms for start in starts),
-            "during": sum(during_start <= start <= during_end for start in starts),
-            "after": sum(start > end for start in starts),
-        }
+        windows = traffic_windows(phase, self.evidence)
         self.evidence.observations["traffic_windows"] = {
             key: value for key, value in windows.items()
         }
@@ -196,54 +176,6 @@ class ScenarioSession:
     def recovery(
         self, phase: Phase, policy: Assertions, has_identity: bool
     ) -> list[AssertionResult]:
-        restores = [
-            e for e in self.evidence.events if e.action == "restore" and e.status == "completed"
-        ]
-        if not restores:
-            return []
-        start = restores[-1].finished_ms
-        assert start is not None
-        recovery = RecoveryEvidence(
-            from_ms=start,
-            backend_identity_available=has_identity,
-            preferred_backend=policy.preferred_backend,
-        )
-        valid = [s for s in phase.samples if s.error is None and s.started_ms >= start]
-        if valid:
-            recovery.first_valid_response_ms = (
-                min(s.started_ms + s.duration_ms for s in valid) - start
-            )
-        preferred = [
-            s
-            for s in valid
-            if policy.preferred_backend is not None and s.backend == policy.preferred_backend
-        ]
-        if preferred:
-            recovery.first_preferred_backend_ms = (
-                min(s.started_ms + s.duration_ms for s in preferred) - start
-            )
+        recovery = observe_recovery(phase, self.evidence.events, policy, has_identity)
         self.evidence.recovery = recovery
-        results = []
-        for name, observed, limit in (
-            (
-                "recovery_within_seconds",
-                recovery.first_valid_response_ms,
-                policy.recovery_within_seconds,
-            ),
-            (
-                "preferred_backend_within_seconds",
-                recovery.first_preferred_backend_ms,
-                policy.preferred_backend_within_seconds,
-            ),
-        ):
-            if limit is not None:
-                actual = observed / 1000 if observed is not None else None
-                results.append(
-                    AssertionResult(
-                        name=name,
-                        actual=actual,
-                        limit=limit,
-                        passed=actual is not None and actual <= limit,
-                    )
-                )
-        return results
+        return evaluate_recovery(recovery, policy) if recovery is not None else []

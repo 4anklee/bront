@@ -3,17 +3,20 @@
 import asyncio
 from pathlib import Path
 from time import monotonic
+from uuid import uuid4
 
 import httpx
+from pydantic import JsonValue
 
+from inference_guard.artifacts import write_artifact
+from inference_guard.checks import evaluate_measurement
 from inference_guard.measurement import drive_load
+from inference_guard.provenance import RunProvenance, digest, runner_identity
 from inference_guard.results import (
-    AssertionResult,
     Attempt,
     Phase,
     RunReport,
     timestamp,
-    write_report,
 )
 from inference_guard.scenarios import ScenarioSession, failure_code
 from inference_guard.suites import LoadedSuite, SuiteError
@@ -24,10 +27,46 @@ def make_report(loaded: LoadedSuite) -> RunReport:
     target = loaded.suite.target
     # Do not serialize URL paths/queries, header values, case bodies or expected outputs.
     origin = str(httpx.URL(str(target.url)).copy_with(path="/", query=None))
+    suite = loaded.suite
+    credential_names = {"authorization", "proxy-authorization", "cookie", "x-api-key", "api-key"}
+    headers: dict[str, JsonValue] = {
+        name.lower(): {"credential": True}
+        if not isinstance(value, str) or name.lower() in credential_names
+        else {"value_sha256": digest(value)}
+        for name, value in target.headers.items()
+    }
+    url = httpx.URL(str(target.url))
+    contract: dict[str, JsonValue] = {
+        "adapter": target.adapter,
+        "method": target.method,
+        "route_sha256": digest({"path": url.path, "query": url.query.decode("ascii")}),
+        "headers": headers,
+        "backend": target.backend.model_dump(mode="json") if target.backend else None,
+        "cases_sha256": loaded.cases_sha256,
+        "case_names": [case.name for case in loaded.cases],
+        "workload": suite.workload.model_dump(mode="json", exclude={"cases"}),
+        "assertions": suite.assertions.model_dump(mode="json"),
+        "scenario": suite.scenario.model_dump(mode="json", exclude={"url"})
+        if suite.scenario
+        else None,
+        "measurement": {
+            "load": "closed-loop",
+            "latency": "all-attempts",
+            "percentile": "nearest-rank",
+        },
+    }
     return RunReport(
         target={"adapter": target.adapter, "origin": origin, "method": target.method},
         workload=loaded.suite.workload.model_dump(mode="json", exclude={"cases"}),
         cases_sha256=loaded.cases_sha256,
+        provenance=RunProvenance(
+            run_id=str(uuid4()),
+            runner=runner_identity(),
+            contract=contract,
+            contract_sha256=digest(contract),
+            deployment=suite.metadata.model_copy(deep=True),
+            missing_metadata=suite.metadata.missing(),
+        ),
     )
 
 
@@ -47,7 +86,9 @@ async def run_suite(
         max_keepalive_connections=workload.concurrency,
         keepalive_expiry=2,
     )
-    await asyncio.to_thread(write_report, report, output)  # Check output before any network calls.
+    await asyncio.to_thread(
+        write_artifact, report, output
+    )  # Check output before any network calls.
     session = None
     try:
         if loaded.suite.scenario is not None:
@@ -134,24 +175,7 @@ async def run_suite(
                 report.reason = "no_measured_requests"
             else:
                 policy = loaded.suite.assertions
-                report.assertions.append(
-                    AssertionResult(
-                        name="max_failed_requests",
-                        actual=report.measurement.failed,
-                        limit=policy.max_failed_requests,
-                        passed=report.measurement.failed <= policy.max_failed_requests,
-                    )
-                )
-                p95 = report.measurement.latency_ms["p95"]
-                if policy.max_p95_ms is not None and p95 is not None:
-                    report.assertions.append(
-                        AssertionResult(
-                            name="max_p95_ms",
-                            actual=p95,
-                            limit=policy.max_p95_ms,
-                            passed=p95 <= policy.max_p95_ms,
-                        )
-                    )
+                report.assertions = evaluate_measurement(report.measurement, policy)
                 if session is not None:
                     report.assertions.extend(
                         session.recovery(
@@ -184,7 +208,7 @@ async def run_suite(
             report.finished_at = timestamp()
             report.warmup.summarize()
             report.measurement.summarize()
-            await asyncio.to_thread(write_report, report, output)
+            await asyncio.to_thread(write_artifact, report, output)
 
         # A first interrupt during finalization must not abandon an owned fault.
         finalization = asyncio.create_task(finalize())
@@ -195,6 +219,6 @@ async def run_suite(
                 report.status = "cancelled"
                 report.reason = "interrupted"
             await finalization
-            await asyncio.to_thread(write_report, report, output)
+            await asyncio.to_thread(write_artifact, report, output)
             raise
     return report

@@ -1,8 +1,8 @@
 # Proposal: inference reliability and release validation
 
-Status: milestones 1–2 implemented, remaining milestones proposed, 2026-10-12.
-Working name: **Bront**. `bront run` and reusable scenarios are available.
-Comparison and report rendering below remain proposed interfaces. See the
+Status: milestones 1–3 implemented, remaining milestones proposed, 2026-10-12.
+Working name: **Bront**. `bront run`, reusable scenarios, and `bront compare` are
+available. HTML report rendering remains a proposed interface. See the
 [external endpoint guide](../external-endpoints.md) for the implemented contract.
 The repository and Python package retain their existing names; `bront` is an
 additional CLI entry point alongside `inferenceguard`.
@@ -61,8 +61,7 @@ bront compare reports/baseline.json reports/candidate.json --policy limits.toml
 bront report reports/candidate.json --baseline reports/baseline.json --output reports/review.html
 ```
 
-The first command is useful independently. Comparison and HTML reporting follow
-later. Kubernetes, Prometheus, Triton, and the reference gateway are optional
+The run and compare commands are implemented. HTML reporting follows later. Kubernetes, Prometheus, Triton, and the reference gateway are optional
 unless a selected adapter or scenario requires them.
 
 ## Milestone 1: test an external HTTP endpoint
@@ -175,6 +174,11 @@ rollout tests prove replacement overlaps measured traffic; cleanup is exercised
 under errors and cancellation; missing scenario capabilities fail before mutation.
 
 ## Milestone 3: release assertions and trustworthy comparison
+
+Implemented with schema-3 workload provenance, caller-declared deployment metadata,
+repeated-run manifests, explicit compatibility allowances, and observed-range
+regression checks. See the [comparison guide](../comparisons.md) for evidence
+requirements and the distinction from statistical significance testing.
 
 Add explicit policies for failed requests, output correctness, latency budgets,
 recovery deadlines, and relative regressions. Define latency populations and

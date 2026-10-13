@@ -4,6 +4,7 @@ import json
 import httpx
 import pytest
 
+from inference_guard.evidence import validate_run
 from inference_guard.runs import run_suite
 from inference_guard.suites import SuiteError, load_suite
 
@@ -101,6 +102,7 @@ async def test_generic_fault_timeline_restoration_and_traffic(path, delay):
     proxy = Proxy()
     report = await proxy.run(path)
     assert report.status == "passed"
+    assert validate_run(report.model_dump(mode="json")) == report
     evidence = report.scenario
     assert evidence is not None and evidence.completed
     assert evidence.cleanup == "restored"

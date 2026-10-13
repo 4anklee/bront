@@ -72,8 +72,8 @@ uv run bront run suite.toml --json --output reports/current.json
 ```
 
 `--url` replaces the complete URL, including the path. JSON output contains the
-same report saved to disk. Comparing two reports automatically is a later
-milestone; today each run checks its own declared limits.
+same report saved to disk. Use `--repeat 3` to collect a manifest of runs, then follow the
+[comparison guide](comparisons.md) for compatibility checks and release policies.
 
 Cases are resolved relative to the suite's directory. Names must be unique and
 use letters, digits, underscores, dots, or hyphens (up to 64 characters). Cases
@@ -164,14 +164,16 @@ errors and cancellation cannot produce a passing verdict.
 | 2 | Configuration, report I/O, execution error, or sample limit reached. |
 | 130 | Interrupted with Ctrl-C; inspect the partial report. |
 
-The default policy allows zero failed requests. Set `max_failed_requests` to an
-explicit tolerance or add `max_p95_ms`; the report includes assertion results.
+The default policy allows zero failed requests and zero output-validation failures.
+Set `max_failed_requests` to a transport/HTTP failure budget; validation failures
+remain separately limited by `max_validation_failures`. Optional `max_error_rate`,
+`max_p95_ms`, and `max_p99_ms` add absolute release limits.
 A response counted as successful passed the specified checks, which may consist
 only of status if no JSON assertions were declared.
 
 ## Reports and limits
 
-Reports identify themselves with `report_type: "bront.run"` and `schema_version: 2`.
+Reports identify themselves with `report_type: "bront.run"` and `schema_version: 3`.
 They are separate from the demo benchmark's schema-v2 reports. The default output
 is `reports/run.json`; supply a distinct `--output` to retain each run. Reports
 are replaced atomically. The destination is checked before traffic, and it cannot
@@ -202,6 +204,6 @@ outside this first adapter's intended use.
 
 [Reusable fault and rollout scenarios](scenarios.md) now coordinate these same
 workloads with Toxiproxy or Kubernetes, including restoration and recovery checks.
-Report comparisons and HTML reporting are the
-[next milestones](proposals/inference-reliability.md#delivery-order). The reference
+[Repeated-run comparisons](comparisons.md) are also available. HTML reporting is
+the [next milestone](proposals/inference-reliability.md#delivery-order). The reference
 demo's four-scenario benchmark remains available.

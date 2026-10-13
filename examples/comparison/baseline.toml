@@ -1,0 +1,30 @@
+version = 1
+
+[target]
+url = "http://127.0.0.1:9000/predict"
+
+[workload]
+cases = "../http-json/cases.jsonl"
+requests = 100
+concurrency = 4
+warmup_requests = 4
+request_timeout_seconds = 2
+
+[assertions]
+max_failed_requests = 0
+max_validation_failures = 0
+max_p95_ms = 1000
+max_p99_ms = 1500
+max_error_rate = 0
+
+[metadata]
+model_revision = "sum-fixture-v1"
+serving_revision = "stdlib-fixture-v1"
+# Fill in architecture and resource configuration for the target before comparing.
+# architecture = "arm64"
+# [metadata.resources]
+# cpu = "shared local host; record CPU model/count here"
+# memory = "shared local host; record capacity/limit here"
+
+[metadata.labels]
+environment = "local-demo"

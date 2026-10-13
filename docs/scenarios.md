@@ -193,7 +193,8 @@ recovery is recorded as null and fails a configured deadline.
 
 Recovery policies are supported only for reversible fault scenarios. The current
 check is a first valid response/first preferred response, not a sustained healthy
-window. Broader release-comparison and statistical policies remain a later milestone.
+window. [Release comparisons](comparisons.md) add repeated-run evidence and conservative
+regression limits; neither workflow claims statistical significance.
 
 ## Cleanup, reports, and CI
 
@@ -210,8 +211,8 @@ experiment. Reports retain only configured scope, identifiers, timings, and coun
 they omit control URLs, Kubernetes specs, command output, and credentials. Generated
 reports belong in `reports/` or CI artifacts, not Git.
 
-New reports use `report_type: "bront.run"`, `schema_version: 2`, with optional
-`scenario` evidence. Schema-1 baseline artifacts remain historical evidence;
+New reports use `report_type: "bront.run"`, `schema_version: 3`, with optional
+`scenario` evidence. Schema-1/2 run artifacts remain historical evidence;
 this command does not reinterpret them. Demo benchmark schema-v2 reports still
 use their separate contract.
 

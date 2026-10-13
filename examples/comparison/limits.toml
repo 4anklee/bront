@@ -1,0 +1,12 @@
+version = 1
+minimum_runs = 3
+minimum_requests = 100
+minimum_duration_seconds = 0
+required_labels = ["environment"]
+allowed_changes = ["deployment.serving_revision"]
+
+# Enable performance gates only on a controlled measurement environment.
+# max_p95_increase_percent = 20
+# max_p99_increase_percent = 25
+# max_throughput_drop_percent = 10
+max_error_rate_increase = 0

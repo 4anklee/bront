@@ -1,7 +1,7 @@
 # Bront — reliability tests for inference deployments
 
 Bront is the working name for this project's pivot from a failover gateway demo
-to a tool for validating inference endpoints. External endpoint testing and reusable fault scenarios are available:
+to a tool for validating inference endpoints. External endpoint testing, reusable faults, and release comparisons are available:
 `bront run` checks an external HTTP JSON service against repeatable input cases,
 output assertions, and latency/error limits, then saves a JSON report for CI.
 
@@ -22,8 +22,10 @@ This workflow needs no gateway, Docker, Kubernetes, or backend-specific status A
 Add a [scenario](docs/scenarios.md) to inject a proxy outage or delay, scale a
 Kubernetes backend to zero, or restart a Deployment under sustained traffic.
 Reports record lifecycle timing, restoration, and service/preferred-backend recovery.
-Comparisons and HTML reports follow in the
-[implementation proposal](docs/proposals/inference-reliability.md).
+Collect repeated runs with `--repeat 3`, then use
+[`bront compare`](docs/comparisons.md) to check compatibility, release assertions,
+and declared regression limits. Missing context or noisy evidence cannot pass.
+HTML reports follow in the [implementation proposal](docs/proposals/inference-reliability.md).
 
 The repository, Python distribution, and import package keep their existing names
 for now. `inferenceguard` remains available alongside the `bront` command.
@@ -293,6 +295,14 @@ src/inference_guard/
   validation.py       JSON Pointer assertions and numeric tolerances
   runs.py             External workload execution and cancellation handling
   results.py          Versioned external run reports
+  provenance.py       Workload fingerprints and declared deployment metadata
+  series.py           Repeated runs and incremental manifests
+  checks.py           Shared release assertions and recovery/overlap checks
+  evidence.py         Artifact integrity and execution-completeness validation
+  comparisons.py      Compatibility, variation, and regression verdicts
+  comparison_models.py  Comparison policies and report contract
+  compare_cli.py      Baseline/candidate comparison command
+  artifacts.py        Shared atomic JSON output
   scenarios.py        Concurrent scenario lifecycle, cleanup, and recovery evidence
   scenario_models.py  Scenario configuration and event contracts
   proxy_scenarios.py   Named Toxiproxy outage/delay driver
@@ -320,7 +330,8 @@ CI runs these checks plus type checking, builds and starts the Compose services,
 and runs the smoke check. A separate benchmark job runs all four scenarios and
 uploads its JSON report. Both jobs clean up their containers. An independent
 external-endpoint job verifies passing, incorrect-output, and interrupted runs
-against the standalone HTTP server and uploads their reports. Dependencies are
+against the standalone HTTP server, checks repeated comparisons, and uploads
+the manifests, child reports, and comparison artifacts. Dependencies are
 locked in `uv.lock`. See [architecture notes](docs/architecture.md) for reliability semantics
 and the path to a real inference workload.
 

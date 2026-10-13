@@ -1,16 +1,13 @@
 """External run reports, deliberately separate from the demo benchmark v2 schema."""
 
-import json
-import os
-import tempfile
 from collections import Counter
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, JsonValue
 
 from inference_guard.measurement import percentile
+from inference_guard.provenance import RunProvenance
 from inference_guard.scenario_models import ScenarioEvidence
 from inference_guard.validation import StrictModel
 
@@ -69,7 +66,7 @@ class AssertionResult(StrictModel):
 
 class RunReport(StrictModel):
     report_type: Literal["bront.run"] = "bront.run"
-    schema_version: Literal[2] = 2
+    schema_version: Literal[3] = 3
     started_at: str = Field(default_factory=timestamp)
     finished_at: str | None = None
     status: Literal["running", "passed", "failed", "error", "cancelled"] = "running"
@@ -77,22 +74,8 @@ class RunReport(StrictModel):
     target: dict[str, JsonValue]
     workload: dict[str, JsonValue]
     cases_sha256: str
+    provenance: RunProvenance
     warmup: Phase = Field(default_factory=Phase)
     measurement: Phase = Field(default_factory=Phase)
     assertions: list[AssertionResult] = Field(default_factory=list)
     scenario: ScenarioEvidence | None = None
-
-
-def write_report(report: RunReport, path: Path) -> None:
-    """Atomic replacement avoids presenting a partially serialized report as evidence."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as stream:
-            temporary = Path(stream.name)
-            json.dump(report.model_dump(mode="json"), stream, indent=2, allow_nan=False)
-            stream.write("\n")
-        os.replace(temporary, path)
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)

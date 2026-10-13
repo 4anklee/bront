@@ -12,6 +12,7 @@ from typing import Literal, Self
 import httpx
 from pydantic import Field, HttpUrl, JsonValue, ValidationError, field_validator, model_validator
 
+from inference_guard.provenance import DeploymentMetadata
 from inference_guard.scenario_models import KubernetesRestart, ScenarioConfig
 from inference_guard.validation import (
     JsonCheck,
@@ -88,6 +89,9 @@ class Workload(StrictModel):
 class Assertions(StrictModel):
     max_failed_requests: int = Field(default=0, ge=0)
     max_p95_ms: float | None = Field(default=None, gt=0)
+    max_p99_ms: float | None = Field(default=None, gt=0)
+    max_error_rate: float | None = Field(default=None, ge=0, le=1)
+    max_validation_failures: int = Field(default=0, ge=0)
     recovery_within_seconds: float | None = Field(default=None, gt=0)
     preferred_backend: str | None = Field(default=None, min_length=1, max_length=128)
     preferred_backend_within_seconds: float | None = Field(default=None, gt=0)
@@ -98,6 +102,7 @@ class Suite(StrictModel):
     target: Target
     workload: Workload
     assertions: Assertions = Field(default_factory=Assertions)
+    metadata: DeploymentMetadata = Field(default_factory=DeploymentMetadata)
     scenario: ScenarioConfig | None = None
 
     @model_validator(mode="after")

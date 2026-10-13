@@ -8,7 +8,7 @@ Your service does not need to adopt Bront's reference gateway.
 
 ## Quickstart
 
-Requires Python 3.14 or newer. From this checkout:
+Requires Python 3.12 or newer; tested on CPython 3.12, 3.13, and 3.14. From this checkout:
 
 ```sh
 uv sync --frozen
@@ -111,7 +111,7 @@ The suite runner uses explicit TOML and process environment variables, not `.env
 uv sync --frozen
 uv run ruff check .
 uv run ruff format --check .
-uv run ty check
+uv run ty check --python-version 3.12
 uv run pytest
 uv run python scripts/smoke_external.py
 uv build
@@ -121,6 +121,19 @@ The distribution, import package, and CLI are all named `bront`. A core wheel
 installation needs no FastAPI or Prometheus dependencies. Source-checkout dev
 requirements include the reference dependencies to test both workflows.
 No registry publication is required to install a locally built wheel.
+
+The `.python-version` file selects Python 3.14 for default checkout development;
+it is not the package's installation requirement. To work on another supported version:
+
+```sh
+uv sync --python 3.12 --frozen
+uv run --python 3.12 pytest
+```
+
+CI tests the full suite and an isolated wheel installation on Python 3.12, 3.13,
+and 3.14, including the run/compare/report smoke workflow. Ruff and type checking
+target the 3.12 minimum to catch accidental use of newer syntax or APIs.
+The reference Docker images continue using Python 3.14.
 
 The Dockerfile provides a `cli` build target for the tool alone and a default
 `reference` target for the fixture services:

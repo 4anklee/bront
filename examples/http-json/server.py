@@ -27,7 +27,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("Expected finite features")
             result = sum(features)
             payload = json.dumps({"prediction": result}, allow_nan=False).encode()
-        except KeyError, TypeError, ValueError, OverflowError:
+        except (KeyError, TypeError, ValueError, OverflowError):
             self.send_error(400)
             return
         self.send_response(200)

@@ -237,7 +237,7 @@ manifest's directory tree. Comparison output cannot overwrite its inputs or poli
 
 CI exercises repeated runs and compatible, insufficient, and incompatible
 comparisons against the standalone HTTP fixture. The existing
-`external-endpoint-reports` artifact includes manifests, child reports, and
+`external-endpoint-reports-py<version>` artifact includes manifests, child reports, and
 comparison results. Run the same check locally with:
 
 ```sh

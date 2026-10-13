@@ -44,8 +44,14 @@ async def drive_load[T](
 
     async def worker() -> None:
         nonlocal dispatched, limited
+        task = asyncio.current_task()
+        assert task is not None
         # No await between selecting the next index and owning the request.
         for index in indices:
+            # A transport may absorb CancelledError while closing a connection.
+            # Do not dispatch more traffic when this worker still owes cancellation.
+            if task.cancelling():
+                raise asyncio.CancelledError
             if deadline is not None and clock() >= deadline:
                 return
             if max_samples is not None and index >= max_samples:

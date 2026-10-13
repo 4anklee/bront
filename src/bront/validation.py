@@ -115,7 +115,7 @@ def validate_json(value: JsonValue, checks: list[JsonCheck]) -> ValidationResult
     for index, check in enumerate(checks):
         try:
             actual = at_pointer(value, check.pointer)
-        except KeyError, IndexError, ValueError:
+        except (KeyError, IndexError, ValueError):
             return ValidationResult(passed=False, reason="missing_path", check_index=index)
         if "equals" in check.model_fields_set and not equivalent(
             actual, check.equals, check.abs_tol, check.rel_tol

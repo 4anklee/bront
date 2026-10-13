@@ -25,7 +25,7 @@ separate contract from the gateway's `double` model. The suite measures 30
 requests across three cases after two warmup requests, at concurrency four.
 To exercise passing results, incorrect outputs, and an actual interrupted
 process together, run `uv run python scripts/smoke_external.py`. CI runs this
-check and uploads `external-endpoint-reports` as an artifact.
+check and uploads `external-endpoint-reports-py<version>` for each supported Python version.
 
 ## Describe your endpoint
 

@@ -126,7 +126,7 @@ inconclusive, and incompatible evidence:
 uv run python scripts/smoke_external.py
 ```
 
-The `external-endpoint-reports` artifact contains both HTML and JSON, including
+The `external-endpoint-reports-py<version>` artifact contains both HTML and JSON, including
 series children. Proxy scenario CI also renders reports and uploads the entire
 `scenario-reports` directory, including on failure when evidence exists. Download
 and open HTML locally; GitHub's artifact listing is not a hosted report viewer.

@@ -49,7 +49,7 @@ class HttpJsonTarget:
         if case.expect.checks or (identity is not None and identity.pointer is not None):
             try:
                 value = parse_json(response.content)
-            except ValueError, UnicodeError, RecursionError:
+            except (ValueError, UnicodeError, RecursionError):
                 if case.expect.checks:
                     return Evaluation(error="validation", reason="invalid_json")
                 # Optional identity extraction must not turn status-only checks into failures.
@@ -65,7 +65,7 @@ class HttpJsonTarget:
             elif identity.pointer is not None:
                 try:
                     backend = at_pointer(value, identity.pointer)
-                except KeyError, IndexError, ValueError:
+                except (KeyError, IndexError, ValueError):
                     pass
         return Evaluation(
             backend=backend if isinstance(backend, str) and 0 < len(backend) <= 128 else None

@@ -13,8 +13,7 @@ jobs:
             - run: uv sync --frozen
             - run: uv run ruff check .
             - run: uv run ruff format --check .
-            - run: uv run ty check
-            - run: uv run pytest
+            - run: uv run ty check --python-version 3.12
             - run: docker compose config --quiet
             - run: docker compose -f compose.triton.yaml config --quiet
             - run: docker compose up --build --wait --wait-timeout 120
@@ -68,20 +67,27 @@ jobs:
               if: always()
               run: docker compose down
 
-    external-endpoint:
+    python-compatibility:
         runs-on: ubuntu-latest
-        timeout-minutes: 5
+        timeout-minutes: 10
+        strategy:
+            fail-fast: false
+            matrix:
+                python: ["3.12", "3.13", "3.14"]
+        env:
+            UV_PYTHON: ${{ matrix.python }}
         steps:
             - uses: actions/checkout@v4
             - uses: astral-sh/setup-uv@v6
               with:
                   version: "0.11.21"
                   enable-cache: true
-            - run: uv sync --frozen
+            - run: uv sync --frozen --python "${{ matrix.python }}"
+            - run: uv run --frozen pytest
             - name: Build and install the standalone package
               run: |
                   uv build
-                  uv venv "$RUNNER_TEMP/bront-core"
+                  uv venv --python "${{ matrix.python }}" "$RUNNER_TEMP/bront-core"
                   uv pip install --python "$RUNNER_TEMP/bront-core/bin/python" dist/bront-*.whl
                   "$RUNNER_TEMP/bront-core/bin/python" -c "import importlib.util; import bront.cli; assert importlib.util.find_spec('fastapi') is None"
             - name: Verify HTTP runs, comparisons, interruption handling, and HTML reports
@@ -90,7 +96,7 @@ jobs:
               if: always() && hashFiles('reports/external/*.json') != ''
               uses: actions/upload-artifact@v7
               with:
-                  name: external-endpoint-reports
+                  name: external-endpoint-reports-py${{ matrix.python }}
                   path: reports/external/
                   if-no-files-found: error
                   retention-days: 14

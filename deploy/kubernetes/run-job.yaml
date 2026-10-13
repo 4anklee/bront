@@ -1,0 +1,37 @@
+# Create explicitly after the bront-run-suite ConfigMap; see docs/kubernetes.md.
+apiVersion: batch/v1
+kind: Job
+metadata:
+    generateName: bront-run-
+    namespace: bront
+spec:
+    backoffLimit: 0
+    activeDeadlineSeconds: 180
+    ttlSecondsAfterFinished: 3600
+    template:
+        metadata:
+            labels:
+                app: bront-run
+        spec:
+            restartPolicy: Never
+            containers:
+                - name: runner
+                  image: bront:local
+                  imagePullPolicy: IfNotPresent
+                  command: [/app/.venv/bin/bront]
+                  args: [run, /suite/suite.toml, --json, --output, /tmp/run.json]
+                  resources:
+                      requests:
+                          cpu: 100m
+                          memory: 256Mi
+                      limits:
+                          cpu: "2"
+                          memory: 1Gi
+                  volumeMounts:
+                      - name: suite
+                        mountPath: /suite
+                        readOnly: true
+            volumes:
+                - name: suite
+                  configMap:
+                      name: bront-run-suite

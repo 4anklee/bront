@@ -21,7 +21,7 @@ spec:
             terminationGracePeriodSeconds: 30
             containers:
                 - name: gateway
-                  image: inference-guard:local
+                  image: bront:local
                   imagePullPolicy: IfNotPresent
                   lifecycle:
                       preStop:
@@ -34,7 +34,7 @@ spec:
                                     import os
                                     import time
                                     from pathlib import Path
-                                    Path(os.environ["IG_DRAIN_FILE"]).touch()
+                                    Path(os.environ["BRONT_DRAIN_FILE"]).touch()
                                     time.sleep(10)
                   ports:
                       - name: http

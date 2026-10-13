@@ -2,10 +2,8 @@
 
 `bront run` sends a repeatable workload to an existing HTTP endpoint and checks
 its responses. It does not require the reference gateway, a backend identity,
-health endpoints, Docker, or Kubernetes. `bront` is the working product name;
-the distribution and import package remain `inference-guard` / `inference_guard`.
-The `inferenceguard` command remains available, including the reference demo's
-`benchmark`, `status`, and `fault` commands.
+health endpoints, Docker, or Kubernetes. The distribution, import package, and
+CLI are all named `bront`.
 
 ## Try the standalone example
 
@@ -205,5 +203,4 @@ outside this first adapter's intended use.
 [Reusable fault and rollout scenarios](scenarios.md) now coordinate these same
 workloads with Toxiproxy or Kubernetes, including restoration and recovery checks.
 [Repeated-run comparisons](comparisons.md) are also available. Render run, series, or comparison JSON as
-[offline HTML](reports.md) with `bront report`. The reference
-demo's four-scenario benchmark remains available.
+[offline HTML](reports.md) with `bront report`. The optional reference stack uses the same suite workflow.

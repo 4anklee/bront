@@ -1,6 +1,6 @@
 import httpx
 
-from inference_guard.mock_backend import create_app
+from bront.reference.mock_backend import create_app
 
 
 async def test_mock_fault_and_reset():

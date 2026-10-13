@@ -1,11 +1,11 @@
 {
-  "uid": "inferenceguard",
-  "title": "InferenceGuard \u00b7 gateway replicas",
+  "uid": "bront",
+  "title": "Bront \u00b7 gateway replicas",
   "schemaVersion": 39,
   "version": 1,
   "editable": false,
   "tags": [
-    "inferenceguard"
+    "bront"
   ],
   "timezone": "browser",
   "refresh": "5s",
@@ -54,7 +54,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (pod) (rate(inferenceguard_requests_total{job=\"gateway-pods\",pod=~\"$pod\",outcome=\"success\"}[$__rate_interval])) / sum by (pod) (rate(inferenceguard_requests_total{job=\"gateway-pods\",pod=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (pod) (rate(bront_requests_total{job=\"gateway-pods\",pod=~\"$pod\",outcome=\"success\"}[$__rate_interval])) / sum by (pod) (rate(bront_requests_total{job=\"gateway-pods\",pod=~\"$pod\"}[$__rate_interval]))",
           "legendFormat": "{{pod}}"
         }
       ],
@@ -98,7 +98,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (pod) (rate(inferenceguard_backend_attempts_total{job=\"gateway-pods\",pod=~\"$pod\",backend=\"fallback\",outcome=\"success\"}[$__rate_interval])) / sum by (pod) (rate(inferenceguard_requests_total{job=\"gateway-pods\",pod=~\"$pod\",outcome=\"success\"}[$__rate_interval]))",
+          "expr": "sum by (pod) (rate(bront_backend_attempts_total{job=\"gateway-pods\",pod=~\"$pod\",backend=\"fallback\",outcome=\"success\"}[$__rate_interval])) / sum by (pod) (rate(bront_requests_total{job=\"gateway-pods\",pod=~\"$pod\",outcome=\"success\"}[$__rate_interval]))",
           "legendFormat": "{{pod}}"
         }
       ],
@@ -142,7 +142,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (pod, outcome) (rate(inferenceguard_requests_total{job=\"gateway-pods\",pod=~\"$pod\"}[$__rate_interval]))",
+          "expr": "sum by (pod, outcome) (rate(bront_requests_total{job=\"gateway-pods\",pod=~\"$pod\"}[$__rate_interval]))",
           "legendFormat": "{{pod}} \u00b7 {{outcome}}"
         }
       ],
@@ -184,7 +184,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, pod, backend) (rate(inferenceguard_backend_duration_seconds_bucket{job=\"gateway-pods\",pod=~\"$pod\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (le, pod, backend) (rate(bront_backend_duration_seconds_bucket{job=\"gateway-pods\",pod=~\"$pod\"}[$__rate_interval])))",
           "legendFormat": "{{pod}} \u00b7 {{backend}}"
         }
       ],
@@ -226,7 +226,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "inferenceguard_circuit_state{job=\"gateway-pods\",pod=~\"$pod\"}",
+          "expr": "bront_circuit_state{job=\"gateway-pods\",pod=~\"$pod\"}",
           "legendFormat": "{{pod}} \u00b7 {{backend}} \u00b7 {{state}}"
         }
       ],
@@ -270,7 +270,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "inferenceguard_circuit_last_recovery_seconds{job=\"gateway-pods\",pod=~\"$pod\"}",
+          "expr": "bront_circuit_last_recovery_seconds{job=\"gateway-pods\",pod=~\"$pod\"}",
           "legendFormat": "{{pod}} \u00b7 {{backend}}"
         }
       ],
@@ -312,7 +312,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (pod, backend, from_state, to_state) (rate(inferenceguard_circuit_transitions_total{job=\"gateway-pods\",pod=~\"$pod\"}[$__rate_interval])) * 60",
+          "expr": "sum by (pod, backend, from_state, to_state) (rate(bront_circuit_transitions_total{job=\"gateway-pods\",pod=~\"$pod\"}[$__rate_interval])) * 60",
           "legendFormat": "{{pod}} \u00b7 {{backend}} \u00b7 {{from_state}} \u2192 {{to_state}}"
         }
       ],

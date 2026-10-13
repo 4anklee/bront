@@ -16,7 +16,7 @@ def main(cluster: str, images: list[str]) -> None:
         ["docker", "image", "inspect", images[0], "--format", "{{.Os}}/{{.Architecture}}"],
         text=True,
     ).strip()
-    with tempfile.TemporaryDirectory(prefix="inferenceguard-kind-images-") as directory:
+    with tempfile.TemporaryDirectory(prefix="bront-kind-images-") as directory:
         archive = str(Path(directory) / "images.tar")
         print(f"Exporting {platform} images; large images may take several minutes", flush=True)
         subprocess.run(
@@ -28,7 +28,7 @@ def main(cluster: str, images: list[str]) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cluster", default="inference-guard")
+    parser.add_argument("--cluster", default="bront")
     parser.add_argument(
         "images", nargs="+", help="Local image tags; their platform must match the kind node"
     )

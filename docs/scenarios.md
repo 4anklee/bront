@@ -51,7 +51,7 @@ The initial control adapter uses an unauthenticated HTTP endpoint; target
 Authorization headers are never forwarded to it.
 
 To use the existing Compose demonstration, start the
-[benchmark overlay](../README.md#benchmark-failover-and-recovery), then:
+[scenario overlay](../README.md#optional-reference-deployment), then:
 
 ```sh
 uv run bront run examples/scenarios/proxy-outage.toml --output reports/scenarios/outage.json
@@ -77,8 +77,8 @@ Bront does not request broader access or switch the current kubectl context.
 ```toml
 [scenario]
 kind = "kubernetes-restart"
-context = "kind-inference-guard"
-namespace = "inference-guard"
+context = "kind-bront"
+namespace = "bront"
 deployment = "gateway"
 expected_replicas = 2
 at_seconds = 3
@@ -115,7 +115,7 @@ For a local demonstration that reaches Service endpoints through the Kubernetes
 API server, start this in a separate terminal:
 
 ```sh
-kubectl --context kind-inference-guard proxy --port 18080
+kubectl --context kind-bront proxy --port 18080
 ```
 
 Then run:
@@ -213,8 +213,7 @@ reports belong in `reports/` or CI artifacts, not Git.
 
 New reports use `report_type: "bront.run"`, `schema_version: 3`, with optional
 `scenario` evidence. Schema-1/2 run artifacts remain historical evidence;
-this command does not reinterpret them. Demo benchmark schema-v2 reports still
-use their separate contract.
+this command does not reinterpret them. The retired demo benchmark-v2 contract is not converted.
 
 CI runs the reusable outage and delay suites against the reference Compose stack
 and uploads `scenario-reports`, including failed runs. Unit tests cover control

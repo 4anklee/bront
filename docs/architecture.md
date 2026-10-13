@@ -1,109 +1,68 @@
-# Reference gateway architecture
+# Architecture
 
-The gateway is now a reference deployment for Bront's inference reliability
-experiments. The [external endpoint runner](external-endpoints.md) uses separate
-suite, adapter, validation, and report models; only traffic scheduling and
-percentile calculation are shared with the demo benchmark. It has no dependency
-on gateway-specific HTTP APIs. The [product proposal](proposals/inference-reliability.md)
-defines the next milestones. The remainder of this document describes the gateway.
-
-The [topology diagram](../README.md) shows the current Kubernetes deployment:
-a Service selects either gateway pod, each with its own breakers and counters.
-The Triton and fallback Services route to single backend pods. Prometheus discovers
-gateway pod IPs directly; Grafana queries the provisioned Prometheus datasource.
-The in-cluster benchmark uses the gateway Service so new connections can reach
-either replica. HTTP keep-alive connections remain attached to a selected pod.
-
-The Compose demo instead has one gateway and a Toxiproxy hop on its primary route:
+Bront is an experiment runner, not an inference gateway. Its core has no dependency
+on FastAPI, Prometheus, a particular model server, or the optional reference stack.
 
 ```mermaid
 flowchart LR
-    CLI[CLI and recorded traffic] --> Gateway
-    Gateway --> Proxy[Toxiproxy primary route]
-    Proxy --> Triton[Triton · ONNX CPU]
-    Gateway --> Fallback[Compatible Python fallback]
-    Controls[CLI fault outage / delay / reset] -. control API .-> Proxy
-    Status[CLI direct inference checks] -. bypass proxy .-> Triton & Fallback
+    Suite[TOML suite + JSONL cases] --> Runner[Bounded workload runner]
+    Runner --> Target[Existing HTTP JSON endpoint]
+    Runner --> Scenario[Optional fault or rollout driver]
+    Scenario --> Target
+    Runner --> Evidence[Versioned JSON + provenance]
+    Evidence --> Compare[Compatibility + release policy]
+    Evidence --> HTML[Offline HTML report]
+    Compare --> HTML
 ```
 
-[The recording](demo/README.md) demonstrates proxy failure, not a stopped Triton
-process. The [Kubernetes experiment](experiments/rolling-updates.md) separately
-scales Triton to zero while replacing both gateway pods under traffic.
+## Core package
 
-## Current behavior
+- `suites`, `validation`, and `targets` load explicit workload and response contracts.
+- `measurement` and `runs` execute bounded, closed-loop traffic with whole-request
+  deadlines and no retries. Warmup remains separate from measured traffic.
+- `scenarios`, `proxy_scenarios`, and `kubernetes_scenarios` coordinate control
+  events with measured traffic and preserve cleanup evidence on interruption.
+- `results`, `provenance`, and `series` retain typed reports, fingerprints, and
+  repeated-run manifests. Caller-declared deployment context is not attestation.
+- `evidence`, `checks`, and `comparisons` validate source consistency and evaluate
+  release policies. Unsupported comparisons remain incompatible or inconclusive.
+- `html_reports` renders offline views of recorded evidence. Rendering a report
+  is separate from deciding whether a release passes.
 
-The gateway owns one pooled asynchronous HTTP client for its process lifetime,
-using FastAPI's [lifespan API](https://fastapi.tiangolo.com/advanced/events/) and
-[HTTPX async requests](https://www.python-httpx.org/async/).
-Each validated inference request tries primary, then fallback. Backend HTTP
-errors, transport errors, timeouts, invalid JSON, and incompatible response shapes
-count as failures. A successful response resets that backend's failure count.
-There is at most one attempt per backend per request.
+The only public commands are `run`, `compare`, and `report`. They use the same
+JSON artifacts locally and in CI. The former gateway-specific benchmark runner
+and manual control commands have been removed; there is no duplicate experiment
+engine to maintain.
 
-Each backend has an independent circuit breaker. After the configured number of
-consecutive failed completions it opens. After cooldown, one incoming request is
-allowed to probe it; other concurrent requests skip it until the probe completes.
-Success closes the circuit; failure starts a new cooldown. Recovery is driven by
-traffic, so `/status` can still say `open` after cooldown until a request arrives.
-Generation tickets keep older in-flight results from overriding a newer circuit.
+## Reference fixtures
 
-The timeout bounds a full backend attempt, including pool wait and reading the
-response. A request can spend approximately twice this timeout across two backends.
-An upstream timeout cannot guarantee that the backend stopped computing. Failover
-is appropriate here because the workload has no side effects.
+`bront.reference` contains the optional gateway and mock backend. Compose and
+Kubernetes deploy these fixtures with an optional Triton primary and fault proxy.
+They provide a target for generic suites and do not participate in core imports.
 
-Metrics report validated request outcomes, actual backend attempt outcomes, and
-attempt latency including errors, one-hot circuit state, transitions, and completed
-open-to-closed recovery episodes. Skipped circuits do not count as attempts.
-The [Kubernetes monitoring stack](observability.md) scrapes each gateway pod
-separately, preserving the independence of its counters and circuit observations.
-Validation failures and disconnected/cancelled requests are not included in the
-request outcome counter. `/healthz` is liveness only; neither it nor `/status`
-guarantees that a backend will serve the next inference request.
-`/readyz` tracks application lifespan readiness independently of backend health,
-so open circuits do not stop the traffic needed for fallback and recovery.
-In Kubernetes, a preStop hook creates a pod-local drain marker before shutdown.
-The gateway then reports unready and sends `Connection: close` while completing
-requests, allowing clients to reconnect through the Service before the process
-exits. The hook waits ten seconds for endpoint changes and connection retirement.
+```mermaid
+flowchart LR
+    Bront[Bront suite] --> Service[Gateway Service]
+    Service --> G1[Gateway replica 1]
+    Service --> G2[Gateway replica 2]
+    G1 & G2 --> Triton[Triton / ONNX double / CPU]
+    G1 & G2 --> Fallback[Compatible mock fallback]
+    Prometheus -. scrape separately .-> G1 & G2
+```
 
-## Deliberate starter boundaries
+Each gateway process owns its HTTP pool, metrics, and circuit breakers. It tries
+primary and then fallback, validating protocol compatibility. Whole-attempt
+timeouts include pool wait and response reads. Consecutive failed completions
+open a circuit; after cooldown, one incoming request probes it. Generation tickets
+prevent stale in-flight results from overriding newer circuit state.
 
-- Circuit state, mock faults, and metrics are in memory per worker. Run one worker
-  per service for the demo. Replicas would have independent observations.
-- Routing preserves primary preference; it does not rank backends by latency.
-- The schema supports one numeric model (`double`), at most 1,024 finite inputs,
-  and an equal number of finite outputs. The default stack uses mocks; the Triton
-  stack executes an equivalent FP64 ONNX graph on CPU. Neither uses a trained model.
-- This is a local development service without authentication, rate limits,
-  admission control, streaming, or persistent state. The mock fault API belongs
-  only in a development environment.
-- The gateway trusts configured backends. Response byte limits and inbound body
-  limits should be added before exposing it to untrusted traffic.
+Recovery is traffic-driven. `/status` is one process's observation, not an active
+backend health check. `/readyz` reflects initialization and draining, independently
+of backend health, so open circuits do not prevent fallback traffic and recovery.
+The Kubernetes preStop hook retires connections while endpoints are removed.
 
-## Implemented reference workflows
-
-The mock and Triton adapters now share the existing circuit breaker and routing
-logic. Triton model version `1` is pinned in both the adapter and model repository
-configuration. See the [Triton walkthrough](triton.md) for the wire contract,
-model generation, and a real container outage/recovery check.
-
-The concurrent benchmark CLI reports success rate, fallback count, throughput,
-latency percentiles, and recovery time. CI runs baseline, outage, slow-backend,
-and recovery scenarios against mocks with Toxiproxy and uploads a JSON report.
-See [benchmark instructions](../README.md#benchmark-failover-and-recovery).
-
-The [local Kubernetes deployment](kubernetes.md) adds Deployments, Services,
-configuration, resource budgets, and health probes, with two gateway replicas.
-Each replica has independent circuit state and metrics.
-
-The rolling-update verification replaces both gateway pods during sustained
-in-cluster traffic, first with Triton healthy and then held unavailable. It
-checks request outcomes, pod replacement, and rollout timing, then restores
-Triton and checks primary recovery on each replica. See the
-[verification walkthrough](kubernetes.md#verify-rolling-updates-under-traffic).
-
-The next product work is reusable failure scenarios, release assertions and
-comparisons, and shareable reports. Adaptive routing and additional serving
-frameworks are outside the initial scope. No production or performance claims
-are implied by this reference deployment.
+The adapters and ONNX `double` model are deliberately narrow reference contracts,
+not general model-serving integrations. This local fixture has no authentication,
+admission control, streaming API, or production deployment claim. See the
+[Triton](triton.md), [Kubernetes](kubernetes.md), and
+[observability](observability.md) guides for its configuration.

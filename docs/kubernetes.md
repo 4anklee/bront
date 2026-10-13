@@ -1,7 +1,7 @@
 # Local Kubernetes with Triton
 
 This deployment runs two gateway replicas, one CPU Triton server, and one mock fallback
-in the `inference-guard` namespace. All three have ClusterIP Services, CPU/memory
+in the `bront` namespace. All three have ClusterIP Services, CPU/memory
 requests and limits, and startup, liveness, and readiness probes. Gateway
 configuration is generated from `deploy/kubernetes/kustomization.yaml`.
 
@@ -16,12 +16,12 @@ for both Docker's copy and the kind node's copy.
 Run from the repository root:
 
 ```sh
-kind create cluster --name inference-guard \
+kind create cluster --name bront \
   --config deploy/kubernetes/kind.yaml --wait 120s
-docker build -t inference-guard:local .
+docker build -t bront:local .
 docker pull nvcr.io/nvidia/tritonserver:26.08-py3
 uv run --frozen python scripts/load_kind_images.py \
-  inference-guard:local nvcr.io/nvidia/tritonserver:26.08-py3
+  bront:local nvcr.io/nvidia/tritonserver:26.08-py3
 ```
 
 The explicit `local` image tag and `IfNotPresent` policy let Kubernetes use the
@@ -36,17 +36,17 @@ the exported archive.
 ## Deploy and connect
 
 ```sh
-kubectl --context kind-inference-guard apply -k deploy/kubernetes
-kubectl --context kind-inference-guard -n inference-guard \
+kubectl --context kind-bront apply -k deploy/kubernetes
+kubectl --context kind-bront -n bront \
   rollout status deployment/triton --timeout=300s
-kubectl --context kind-inference-guard -n inference-guard \
+kubectl --context kind-bront -n bront \
   rollout status deployment/fallback --timeout=120s
-kubectl --context kind-inference-guard -n inference-guard \
+kubectl --context kind-bront -n bront \
   rollout status deployment/gateway --timeout=120s
-kubectl --context kind-inference-guard -n inference-guard get pods,services
+kubectl --context kind-bront -n bront get pods,services
 
 # Leave this running; the port is separate from the Compose demo ports.
-kubectl --context kind-inference-guard -n inference-guard \
+kubectl --context kind-bront -n bront \
   port-forward service/gateway 28000:8000 --address 127.0.0.1
 ```
 
@@ -67,108 +67,89 @@ and verifies return to primary. Run it against this disposable local deployment.
 If the process is forcibly killed, restore with:
 
 ```sh
-kubectl --context kind-inference-guard -n inference-guard \
+kubectl --context kind-bront -n bront \
   scale deployment/triton --replicas=1
 ```
 
-You can also run a baseline benchmark through the port-forward:
+Run the generic gateway suite through the port-forward:
 
 ```sh
-uv run --frozen inferenceguard benchmark --scenario baseline \
-  --gateway-url http://127.0.0.1:28000 --requests 100 --concurrency 10 \
-  --output reports/kubernetes-baseline.json
+uv run bront run examples/gateway/suite.toml \
+  --url http://127.0.0.1:28000/v1/infer --output reports/kubernetes-baseline.json
 ```
 
-The other CLI scenarios require Toxiproxy, which is only configured in the
-Compose benchmark overlay for now. Port-forwarding adds overhead, so these
-measurements are a functional check rather than a cluster performance estimate.
+A port-forward selects one pod. It is a functional check, not a Service load
+balancing or cluster-performance measurement.
 
-To sustain baseline traffic for a minute, replace `--requests 100` with
-`--duration 60`. This exercises the pod selected by the port-forward. To test
-Service load balancing across replicas, run the benchmark inside the cluster
-against `http://gateway:8000` instead.
+## Run through the gateway Service
 
-## Benchmark through the gateway Service
-
-The optional benchmark Job runs inside the cluster and sends 60 seconds of
-baseline traffic to `http://gateway:8000` with concurrency 20. It is excluded
-from the application Kustomization, so deploying the app does not start a load
-test. Build its separate image tag to include the latest CLI without restarting
-the gateway pods:
+The optional Job runs the same Bront suite engine inside Kubernetes against
+`http://gateway:8000`. It dispatches 1,000 measured requests with concurrency 20,
+plus 20 warmup requests. Keep-alive connections can remain attached to one pod;
+an even distribution is not guaranteed.
 
 ```sh
-docker build -t inference-guard:benchmark .
-uv run --frozen python scripts/load_kind_images.py inference-guard:benchmark
-benchmark_job=$(kubectl --context kind-inference-guard \
-  create -f deploy/kubernetes/benchmark-job.yaml -o jsonpath='{.metadata.name}')
-kubectl --context kind-inference-guard -n inference-guard \
-  wait --for=condition=complete "job/$benchmark_job" --timeout=180s
+kubectl --context kind-bront -n bront create configmap bront-run-suite \
+  --from-file=suite.toml=examples/kubernetes/suite.toml \
+  --from-file=cases.jsonl=examples/gateway/cases.jsonl \
+  --dry-run=client -o yaml | kubectl --context kind-bront -n bront apply -f -
+run_job=$(kubectl --context kind-bront create -f deploy/kubernetes/run-job.yaml \
+  -o jsonpath='{.metadata.name}')
+kubectl --context kind-bront -n bront wait \
+  --for=condition=complete "job/$run_job" --timeout=180s
 mkdir -p reports
-kubectl --context kind-inference-guard -n inference-guard \
-  logs "job/$benchmark_job" > "reports/$benchmark_job.json"
+kubectl --context kind-bront -n bront logs "job/$run_job" > "reports/$run_job.json"
+uv run bront report "reports/$run_job.json" --output "reports/$run_job.html"
 ```
 
-Successful Job logs contain a compact JSON summary with counts, latency, errors,
-and configuration. Raw samples are omitted (`samples_omitted: true`) to keep
-container log rotation from truncating large reports. On failure, logs also include CLI
-diagnostics; inspect the Job and its logs before treating them as a JSON report.
-Each invocation creates a new Job. Failed benchmarks are not retried, and finished
-Jobs are automatically removed after an hour, so export results before then.
+The Job is excluded from the application's Kustomization and is never launched by
+applying the reference deployment. It uses the already loaded `bront:local` image.
+Logs contain the full schema-3 JSON, including request samples, so the report can
+be rendered and checked without a custom summary schema. The count is intentionally
+small to stay below ordinary container log rotation limits. Do not use this log
+export pattern for unbounded or large sustained runs; provide persistent artifact
+storage for those workloads.
 
-The Service selects a gateway pod for each new connection. HTTP keep-alive can
-send many requests over the same connection, so an even split is not guaranteed.
-To verify both replicas handle traffic, compare each pod's
-`inferenceguard_requests_total` metrics before and after the run (use `kubectl
-exec` or separate pod port-forwards to fetch `/metrics`). On an otherwise idle
-stack, the increases sum to the measured request count plus warmup and preparation
-requests. Scraping `/metrics` does not increment that counter. This check assumes
-the pods are not replaced during the run; rolling-update measurements need to
-account for counters from both old and new pods.
+If the Job fails its assertions it remains failed and is not retried. Export logs
+even when `kubectl wait` fails; inspect Job diagnostics if the container could not
+start or the logs are not a valid artifact. Finished Jobs expire after one hour.
+Use `kubectl --context kind-bront -n bront delete "job/$run_job"` for earlier cleanup.
 
-To inspect or remove a Job manually:
+On an otherwise idle stack, compare each gateway pod's `bront_requests_total`
+counter before and after the run to confirm both received traffic. Counters are
+per-process and reset on pod replacement; scraping `/metrics` does not increment
+the request counter. The [dashboard](observability.md) preserves pod identity.
+
+## Verify rollout and outage scenarios
+
+Use the reusable suites rather than a gateway-specific orchestration script.
+The API-server Service proxy keeps the traffic endpoint available while pods are
+replaced; it adds overhead and is not a direct in-cluster performance measurement.
+Leave this running in a separate terminal:
 
 ```sh
-kubectl --context kind-inference-guard -n inference-guard describe "job/$benchmark_job"
-kubectl --context kind-inference-guard -n inference-guard logs "job/$benchmark_job"
-kubectl --context kind-inference-guard -n inference-guard delete "job/$benchmark_job"
+kubectl --context kind-bront proxy --port 18080
 ```
 
-## Verify rolling updates under traffic
-
-After loading the current `inference-guard:benchmark` image as above, run:
+Then run one experiment at a time:
 
 ```sh
-uv run --frozen python scripts/verify_rolling_updates.py \
-  --duration 60 --concurrency 20 --output reports/rolling-updates.json
+uv run bront run examples/scenarios/kubernetes-restart.toml \
+  --output reports/restart.json
+uv run bront run examples/scenarios/kubernetes-scale-zero.toml \
+  --output reports/outage.json
+uv run bront report reports/restart.json --output reports/restart.html
 ```
 
-This check creates temporary in-cluster Jobs using the benchmark's existing
-request validator and bounded-concurrency load generator. It runs two experiments:
-
-1. Sustain traffic through `http://gateway:8000`, restart the gateway Deployment,
-   and require all measured requests to succeed through Triton.
-2. Scale Triton to zero, sustain fallback traffic through the same Service,
-   restart the gateway again, and require all measured requests to succeed
-   through fallback.
-
-Each experiment includes five seconds of measured traffic before the restart.
-The check confirms both pod identities changed and that the rollout completed
-before the measured traffic ended. Failures are counted without client retries.
-The JSON report includes counts, latency, errors, per-second traffic summaries,
-up to 100 failed samples, and pod identities and rollout timestamps. Exit code
-`1` indicates failed expectations or an incomplete experiment.
-
-Triton is restored in a `finally` block and primary inference is checked directly
-on **each** replacement gateway pod. Temporary Jobs are removed after each
-experiment. Reported recovery time includes Triton startup and the checks of
-both gateway pods. Run against this local deployment without concurrent deployments or
-fault injection. If the script is forcibly killed, restore Triton with the scale
-command above; temporary Jobs expire automatically after an hour. Gateway pods
-are replaced, so restart any existing port-forward afterward.
+These are separate experiments: gateway replacement under traffic, and a Triton
+outage with restoration. They do not claim to combine an outage and restart in
+one suite. The [scenario guide](scenarios.md) documents ownership guards, observed
+replacement, fault overlap, and recovery semantics. Custom suite timing must leave
+enough time for the local cluster to reconcile and restore the workload.
 
 The gateway rollout keeps `maxUnavailable: 0` and `maxSurge: 1`, and requires five
 seconds of readiness before retiring a previous pod. Its `preStop` hook creates
-the pod-local `IG_DRAIN_FILE` marker, then waits ten seconds. During that window,
+the pod-local `BRONT_DRAIN_FILE` marker, then waits ten seconds. During that window,
 readiness returns 503 and responses include `Connection: close`, so clients
 finish their requests and reconnect through the Service. The process keeps
 serving late arrivals while endpoint removal propagates. The remaining portion
@@ -206,7 +187,7 @@ port-forward selects just one pod.
 Kustomize packages the existing tiny ONNX model and configuration into a ConfigMap
 mounted under `/models/double`. Generated names include content hashes, so config
 or model changes trigger a Deployment update on the next apply. This approach is
-only for the 140-byte demo model; larger models need a different distribution
+only for the tiny demo model; larger models need a different distribution
 mechanism, such as an image or a volume. The Kubernetes deployment does not load
 your local `.env` file.
 
@@ -216,10 +197,10 @@ For application code changes, rebuild and reload the local image, then restart
 the application Deployments. Reusing a tag alone does not trigger a rollout:
 
 ```sh
-docker build -t inference-guard:local .
-uv run --frozen python scripts/load_kind_images.py inference-guard:local
-kubectl --context kind-inference-guard apply -k deploy/kubernetes
-kubectl --context kind-inference-guard -n inference-guard \
+docker build -t bront:local .
+uv run --frozen python scripts/load_kind_images.py bront:local
+kubectl --context kind-bront apply -k deploy/kubernetes
+kubectl --context kind-bront -n bront \
   rollout restart deployment/gateway deployment/fallback
 ```
 
@@ -227,19 +208,19 @@ Restart the port-forward after the gateway pod is replaced. To investigate a
 pod that is not ready:
 
 ```sh
-kubectl --context kind-inference-guard -n inference-guard get pods
-kubectl --context kind-inference-guard -n inference-guard describe pods
-kubectl --context kind-inference-guard -n inference-guard logs deployment/triton
-kubectl --context kind-inference-guard -n inference-guard logs deployment/gateway
+kubectl --context kind-bront -n bront get pods
+kubectl --context kind-bront -n bront describe pods
+kubectl --context kind-bront -n bront logs deployment/triton
+kubectl --context kind-bront -n bront logs deployment/gateway
 ```
 
 Stop the port-forward with Ctrl-C. Remove just the demo namespace, or delete the
 entire dedicated cluster when finished:
 
 ```sh
-kubectl --context kind-inference-guard delete namespace inference-guard
+kubectl --context kind-bront delete namespace bront
 # Alternatively:
-kind delete cluster --name inference-guard
+kind delete cluster --name bront
 ```
 
 ## Observe individual gateway replicas

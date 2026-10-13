@@ -5,16 +5,16 @@ from html.parser import HTMLParser
 import pytest
 from typer.testing import CliRunner
 
-from inference_guard.artifacts import write_artifact
-from inference_guard.checks import evaluate_measurement
-from inference_guard.cli import app
-from inference_guard.comparison_models import ComparisonPolicy, ComparisonReport
-from inference_guard.html_reports import render_file, windows
-from inference_guard.provenance import digest
-from inference_guard.results import Attempt
-from inference_guard.runs import make_report
-from inference_guard.series import RunReference, SeriesReport
-from inference_guard.suites import SuiteError, load_suite
+from bront.artifacts import write_artifact
+from bront.checks import evaluate_measurement
+from bront.cli import app
+from bront.comparison_models import ComparisonPolicy, ComparisonReport
+from bront.html_reports import render_file, windows
+from bront.provenance import digest
+from bront.results import Attempt
+from bront.runs import make_report
+from bront.series import RunReference, SeriesReport
+from bront.suites import SuiteError, load_suite
 
 
 class Page(HTMLParser):

@@ -1,7 +1,7 @@
 import pytest
 from pydantic import JsonValue, ValidationError
 
-from inference_guard.validation import JsonCheck, at_pointer, parse_json, validate_json
+from bront.validation import JsonCheck, at_pointer, parse_json, validate_json
 
 
 @pytest.mark.parametrize(

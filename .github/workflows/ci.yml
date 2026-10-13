@@ -27,12 +27,12 @@ jobs:
               if: always()
               run: docker compose down
 
-    benchmark:
+    scenarios:
         runs-on: ubuntu-latest
         timeout-minutes: 10
         env:
-            COMPOSE_FILE: compose.yaml:compose.benchmark.yaml
-            COMPOSE_PROJECT_NAME: inferenceguard-benchmark-ci
+            COMPOSE_FILE: compose.yaml:compose.scenarios.yaml
+            COMPOSE_PROJECT_NAME: bront-scenarios-ci
         steps:
             - uses: actions/checkout@v4
             - uses: astral-sh/setup-uv@v6
@@ -41,15 +41,8 @@ jobs:
                   enable-cache: true
             - run: uv sync --frozen
             - run: docker compose config --quiet
-            - name: Start benchmark stack
+            - name: Start scenario stack
               run: docker compose up --build --wait --wait-timeout 120
-            - name: Run all benchmark scenarios
-              run: >-
-                  uv run --frozen inferenceguard benchmark
-                  --scenario all --requests 20 --concurrency 4 --warmup 4
-                  --gateway-url http://127.0.0.1:8000
-                  --toxiproxy-url http://127.0.0.1:18474
-                  --output reports/benchmark-ci.json
             - name: Run reusable proxy scenarios
               run: |
                   uv run --frozen bront run examples/scenarios/proxy-outage.toml --output reports/scenarios/proxy-outage.json
@@ -68,18 +61,10 @@ jobs:
                   path: reports/scenarios/
                   if-no-files-found: error
                   retention-days: 14
-            - name: Upload benchmark report
-              if: always() && hashFiles('reports/benchmark-ci.json') != ''
-              uses: actions/upload-artifact@v7
-              with:
-                  name: benchmark-report
-                  path: reports/benchmark-ci.json
-                  if-no-files-found: error
-                  retention-days: 14
-            - name: Benchmark Compose logs
+            - name: Scenario Compose logs
               if: failure()
               run: docker compose logs --no-color
-            - name: Stop benchmark services
+            - name: Stop scenario services
               if: always()
               run: docker compose down
 
@@ -93,8 +78,14 @@ jobs:
                   version: "0.11.21"
                   enable-cache: true
             - run: uv sync --frozen
+            - name: Build and install the standalone package
+              run: |
+                  uv build
+                  uv venv "$RUNNER_TEMP/bront-core"
+                  uv pip install --python "$RUNNER_TEMP/bront-core/bin/python" dist/bront-*.whl
+                  "$RUNNER_TEMP/bront-core/bin/python" -c "import importlib.util; import bront.cli; assert importlib.util.find_spec('fastapi') is None"
             - name: Verify HTTP runs, comparisons, interruption handling, and HTML reports
-              run: uv run --frozen python scripts/smoke_external.py
+              run: '"$RUNNER_TEMP/bront-core/bin/python" scripts/smoke_external.py'
             - name: Upload external endpoint reports
               if: always() && hashFiles('reports/external/*.json') != ''
               uses: actions/upload-artifact@v7

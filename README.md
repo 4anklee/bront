@@ -1,9 +1,14 @@
-# Bront — reliability tests for inference deployments
+# Bront
 
-Bront is the working name for this project's pivot from a failover gateway demo
-to a tool for validating inference endpoints. External endpoint testing, reusable faults, and release comparisons are available:
-`bront run` checks an external HTTP JSON service against repeatable input cases,
-output assertions, and latency/error limits, then saves a JSON report for CI.
+Repeatable reliability tests and release evidence for inference deployments.
+Bront checks an existing HTTP JSON endpoint against representative inputs,
+correctness assertions, and latency/error limits. Add fault or rollout scenarios,
+compare repeated baseline and candidate runs, and share an offline HTML report.
+Your service does not need to adopt Bront's reference gateway.
+
+## Quickstart
+
+Requires Python 3.14 or newer. From this checkout:
 
 ```sh
 uv sync --frozen
@@ -13,335 +18,120 @@ uv run python examples/http-json/server.py
 In another terminal:
 
 ```sh
-uv run bront run examples/http-json/suite.toml --output reports/baseline.json
+uv run bront run examples/http-json/suite.toml --output reports/run.json
+uv run bront report reports/run.json --output reports/review.html
 ```
 
-Start with the [external endpoint guide](docs/external-endpoints.md) to configure
-your own request bodies, expected outputs, credentials, and sustained traffic.
-This workflow needs no gateway, Docker, Kubernetes, or backend-specific status API.
-Add a [scenario](docs/scenarios.md) to inject a proxy outage or delay, scale a
-Kubernetes backend to zero, or restart a Deployment under sustained traffic.
-Reports record lifecycle timing, restoration, and service/preferred-backend recovery.
-Collect repeated runs with `--repeat 3`, then use
-[`bront compare`](docs/comparisons.md) to check compatibility, release assertions,
-and declared regression limits. Missing context or noisy evidence cannot pass.
-Render runs, repeated-run manifests, or comparison artifacts as
-[self-contained HTML](docs/reports.md), including downloadable JSON evidence:
+Open `reports/review.html` in a browser. The standalone example requires no Docker,
+Kubernetes, Triton, or backend-specific status API.
+
+For your own service, configure the URL, JSONL input cases, expected outputs,
+workload, and assertions in a TOML suite. Read the
+[external endpoint guide](docs/external-endpoints.md) for the supported contract.
+Credentials can reference environment variables; raw payloads and credential values
+are excluded from normal reports.
+
+## Release workflow
 
 ```sh
-uv run bront report reports/baseline.json --output reports/review.html
+uv run bront run baseline.toml --repeat 3 --output reports/baseline.json
+uv run bront run candidate.toml --repeat 3 --output reports/candidate.json
+uv run bront compare reports/baseline.json reports/candidate.json \
+  --policy limits.toml --output reports/comparison.json
+uv run bront report reports/comparison.json --output reports/comparison.html
 ```
 
-Open `reports/review.html` in a browser; it works offline.
+Record deployment metadata and explicitly allow the intended change in the
+comparison policy. Bront checks experiment compatibility before evaluating
+regressions. Missing context, incomplete execution, or insufficient repeat evidence
+cannot produce a passing comparison. Observed variation is not a statistical
+significance test.
 
-The repository, Python distribution, and import package keep their existing names
-for now. `inferenceguard` remains available alongside the `bront` command.
+| Command | Purpose |
+| --- | --- |
+| `bront run` | Execute a suite, retain samples, and evaluate release assertions. |
+| `bront compare` | Compare compatible repeated experiments against an explicit policy. |
+| `bront report` | Render recorded evidence as self-contained HTML with JSON downloads. |
 
-## Reference deployment
+`run` and `compare` return 0 for passing evidence, 1 for failed checks, and 2 for
+execution/configuration problems or inconclusive/incompatible comparisons.
+Interrupted runs use exit 130 and retain partial evidence. `report` returns 0 when
+rendering succeeds; it does not replace a release gate.
 
-The existing gateway and its deployment examples remain a test fixture for
-failover, faults, and rolling updates.
+## Guides
 
-The default workload is **two mock services**, each doubling a list of numbers.
-An alternative stack runs **NVIDIA Triton with an ONNX model on CPU** as primary,
-preserving the same inputs and outputs through the mock fallback. Follow the
-[Triton walkthrough](docs/triton.md) to run it and verify outage recovery.
-The benchmark CLI measures baseline, outage, slow-backend, and recovery scenarios.
-A [local Kubernetes deployment](docs/kubernetes.md) runs the gateway, Triton, and
-fallback with resource budgets and health probes. A trained-model example remains
-a later milestone; adaptive routing is outside the current product scope.
-The optional [Kubernetes dashboard](docs/observability.md) compares request success,
-fallback usage, latency, circuit state, and recovery across individual gateway pods.
+- [External endpoints and response validation](docs/external-endpoints.md)
+- [Proxy faults and Kubernetes scenarios](docs/scenarios.md)
+- [Repeated runs and release comparisons](docs/comparisons.md)
+- [Offline HTML reports](docs/reports.md)
+- [Architecture](docs/architecture.md)
+- [Migration to Bront](docs/migration.md)
+- [Roadmap and remaining validation](docs/proposals/inference-reliability.md)
 
-```mermaid
-flowchart LR
-    Client --> S[Gateway Service :8000]
-    subgraph Kubernetes[Local Kubernetes · inference-guard namespace]
-        Job[Benchmark Job] --> S
-        S --> G1[Gateway pod 1 · own breakers]
-        S --> G2[Gateway pod 2 · own breakers]
-        G1 & G2 --> TS[Triton Service]
-        G1 & G2 --> FS[Fallback Service]
-        TS --> T[Triton · ONNX double · CPU]
-        FS --> F[Python fallback · same contract]
-        P[Prometheus] -. scrape each pod .-> G1 & G2
-        D[Grafana dashboard] --> P
-    end
+## Optional reference deployment
+
+The reference gateway, compatible mock fallback, Triton `double` model, fault
+proxy, and monitoring stack exercise the same suite workflow. They are fixtures,
+not required infrastructure for using Bront. Gateway code lives in
+`bront.reference`; its server dependencies are an optional `reference` extra.
+
+```sh
+# Build and start the mock reference stack.
+docker compose up --build --wait
+uv run bront run examples/gateway/suite.toml --output reports/gateway.json
+uv run python scripts/smoke_compose.py
 ```
 
-## Watch and reproduce
+For controlled outage and delay scenarios:
 
-[![60-second outage and recovery demonstration](docs/demo/poster.png)](docs/demo/inferenceguard.mp4)
+```sh
+docker compose -f compose.yaml -f compose.scenarios.yaml up --build --wait
+uv run bront run examples/scenarios/proxy-outage.toml --output reports/outage.json
+uv run bront run examples/scenarios/proxy-delay.toml --output reports/delay.json
+uv run bront report reports/outage.json --output reports/outage.html
+```
 
-[Watch the video and reproduce it](docs/demo/README.md). The recording uses the
-Compose fault proxy; the diagram above shows the Kubernetes deployment.
-The [curated rolling-update experiment](docs/experiments/rolling-updates.md)
-records the command, hardware, configuration, and results for two gateway replicas.
+Run one fault experiment at a time against a disposable reference stack. Scenarios
+record control events and restore owned faults on ordinary errors and interruption.
+The [scenario guide](docs/scenarios.md) explains cleanup and recovery boundaries.
 
-## Run locally
+See the [Triton walkthrough](docs/triton.md) for the ONNX CPU integration,
+[Kubernetes guide](docs/kubernetes.md) for two independent gateway replicas, and
+[observability guide](docs/observability.md) for per-pod metrics. The `double` model
+is an integration fixture; a trained-model example remains on the roadmap.
 
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then:
+For a locally launched gateway, copy `.env.example` to `.env` and install the
+reference dependencies with `uv sync --extra reference`. Entry points are
+`bront.reference.gateway:app` and `bront.reference.mock_backend:app`.
+Reference environment variables use `BRONT_`; metrics use `bront_`.
+The suite runner uses explicit TOML and process environment variables, not `.env`.
+
+## Development and packaging
 
 ```sh
 uv sync --frozen
-cp .env.example .env
-```
-
-Run these in three separate terminals from the repository root:
-
-```sh
-uv run uvicorn inference_guard.mock_backend:app --port 8001
-uv run uvicorn inference_guard.mock_backend:app --port 8002
-uv run uvicorn inference_guard.gateway:app --port 8000
-```
-
-Or start the services with Docker Compose (requires a running Docker engine and
-Compose v2). Local development and the container both use Python 3.14:
-
-```sh
-docker compose up --build
-# Optional Prometheus at http://localhost:9090:
-docker compose --profile observability up --build
-```
-
-Interactive API docs: <http://localhost:8000/docs>.
-
-### Verify the container stack
-
-Stop any local services using ports 8000–8002 first. Against a fresh demo stack:
-
-```sh
-docker compose config --quiet
-docker compose up --build --wait --wait-timeout 120
-docker compose exec -T gateway /app/.venv/bin/python --version
-uv run python scripts/smoke_compose.py
-docker compose down
-```
-
-The smoke check injects faults into both mocks and verifies primary inference,
-fallback, circuit opening, recovery, timeout handling, all-down 503 responses,
-and the metrics endpoint. It takes about 12 seconds and resets mock faults on
-exit. Run it against a disposable stack with the default configuration; circuit
-state may take another cooldown to recover afterward. If a check fails, inspect
-`docker compose logs --no-color` before stopping the stack.
-
-To keep local Python services running alongside Docker, select different host ports:
-
-```sh
-IG_GATEWAY_PORT=18000 IG_PRIMARY_PORT=18001 IG_FALLBACK_PORT=18002 \
-  docker compose up --build --wait --wait-timeout 120
-uv run python scripts/smoke_compose.py \
-  --gateway-url http://127.0.0.1:18000 \
-  --primary-url http://127.0.0.1:18001 \
-  --fallback-url http://127.0.0.1:18002
-```
-
-## Inspect and control the demo
-
-```sh
-uv run inferenceguard status --check-backends
-uv run inferenceguard fault outage
-uv run inferenceguard fault reset
-```
-
-Fault commands require the Compose benchmark overlay. See the
-[terminal controls guide](docs/terminal-demo.md) for setup, URL options, persistent
-fault semantics, and the distinction between circuit observations and active checks.
-
-## Try failover and recovery
-
-```sh
-curl -s http://localhost:8000/v1/infer \
-  -H 'Content-Type: application/json' \
-  -d '{"model":"double","inputs":[1,2,3]}'
-# {"model":"double","outputs":[2.0,4.0,6.0],"backend":"primary"}
-
-curl -s -X PUT http://localhost:8001/faults \
-  -H 'Content-Type: application/json' -d '{"unavailable":true}'
-
-# Repeat the inference request: it now succeeds through the fallback.
-# After three failed primary attempts, the primary circuit opens.
-curl -s http://localhost:8000/status
-curl -s http://localhost:8000/metrics
-
-# Reset faults. After the 10-second cooldown, the next request probes primary.
-curl -s -X PUT http://localhost:8001/faults \
-  -H 'Content-Type: application/json' -d '{}'
-
-# To simulate a slow backend instead:
-curl -s -X PUT http://localhost:8001/faults \
-  -H 'Content-Type: application/json' -d '{"delay_seconds":2}'
-```
-
-`PUT /faults` replaces all fault settings; `{}` resets them. Fault injection is
-an unauthenticated local demo feature. Compose publishes ports on loopback only.
-
-## Benchmark failover and recovery
-
-Start the mock stack with the Toxiproxy overlay, which lets the CLI interrupt or
-delay traffic to the primary:
-
-```sh
-docker compose -f compose.yaml -f compose.benchmark.yaml \
-  up --build -d --wait --wait-timeout 120
-uv run --frozen inferenceguard benchmark \
-  --scenario all --requests 100 --concurrency 10 \
-  --output reports/benchmark.json
-```
-
-For Triton, replace `compose.yaml` with `compose.triton.yaml` in the Compose
-command and allow `--wait-timeout 180`. Run one benchmark at a time against a
-local demo stack with healthy backends. The CLI restores the faults it injects
-on normal exit and interruption.
-
-| Scenario | Passing behavior |
-| --- | --- |
-| `baseline` | Every measured request succeeds through primary |
-| `outage` | Primary connections are disabled; every measured request succeeds through fallback |
-| `slow-backend` | Primary responses are delayed past the gateway timeout; every measured request succeeds through fallback |
-| `recovery` | After an outage opens the circuit, clear the fault; all measured requests succeed and primary returns before the recovery deadline |
-
-`--requests` is the measured count **per scenario**. The table reports primary
-and fallback counts, attempted requests per second, and p50/p95/p99 latency.
-Latency includes failed requests; warmup and extra recovery probes are excluded
-from those measurements. Recovery time is measured from fault removal and is
-normally about 10 seconds with the Compose defaults. A full four-scenario run
-also waits for primary recovery between phases.
-
-For sustained traffic, use `--duration` instead of `--requests`:
-
-```sh
-uv run --frozen inferenceguard benchmark \
-  --scenario baseline --duration 60 --concurrency 10 \
-  --output reports/sustained.json
-```
-
-Duration is in seconds **per scenario** (0.001–3600). Each worker sends another
-request as soon as the previous one finishes, up to the concurrency limit. The
-runner stops starting requests at the deadline and waits for in-flight requests
-to finish within their client timeouts. Reported elapsed time and throughput
-include that final drain. Setup, warmup, and extra recovery probes are outside
-the measured duration; `--scenario all --duration 60` measures four 60-second
-phases, plus that overhead. `--duration` and `--requests` cannot be combined.
-Omitting both retains the default of 100 measured requests per scenario.
-
-The CLI reads `.env` in the current directory. It uses `IG_GATEWAY_PORT` (default
-`8000`) and `IG_TOXIPROXY_PORT` (default `18474`) for local URLs. Override these
-with `--gateway-url` and `--toxiproxy-url`, or set `IG_BENCHMARK_GATEWAY_URL` and
-`IG_BENCHMARK_TOXIPROXY_URL`. Explicit CLI URLs take precedence.
-
-```sh
-# A quick run matching CI's workload: 80 measured requests in total.
-uv run --frozen inferenceguard benchmark \
-  --scenario all --requests 20 --concurrency 4 --warmup 4 \
-  --output reports/benchmark-ci.json
-uv run inferenceguard benchmark --help
-
-# Use compose.triton.yaml here if you started the Triton stack.
-docker compose -f compose.yaml -f compose.benchmark.yaml down
-```
-
-Exit codes are `0` for passing scenarios, `1` for failed expectations, and `2`
-when the run cannot complete. Completed runs write the JSON report even when
-expectations fail. The report includes configuration, individual samples,
-errors, and recovery probes. Local `reports/` files are ignored by Git.
-Report schema version 2 adds `config.duration_seconds`; `config.requests` is
-`null` in duration mode. Each phase's `requests` is always the actual measured
-count. Individual samples are retained in memory, so longer runs produce larger
-reports.
-
-CI runs the small four-scenario workload against fresh mock services and the
-fault proxy. It checks correctness and recovery without imposing throughput or
-latency thresholds on shared runners. Download `benchmark-report` from the
-workflow run's **Artifacts** section; reports are retained for 14 days, including
-completed runs with failed expectations. Setup errors that prevent report
-creation are recorded in the job logs.
-
-## API and configuration
-
-| Endpoint | Purpose |
-| --- | --- |
-| `POST /v1/infer` | Validate inputs and try primary, then fallback; 503 if both fail |
-| `GET /healthz` | Gateway process liveness; does not probe backends |
-| `GET /readyz` | Gateway readiness; unready while draining, stays ready during backend outages |
-| `GET /status` | Observed circuit states; does not actively check backend health |
-| `GET /metrics` | Prometheus request totals, backend attempt totals and latency |
-| Mock `POST /infer` | Deterministic `double` workload |
-| Mock `PUT /faults` | Replace injected delay/failure settings |
-
-Gateway settings load from the environment or `.env`. Compose explicitly sets
-its own values in `compose.yaml`.
-
-| Variable | Default |
-| --- | --- |
-| `IG_PRIMARY_URL` | `http://127.0.0.1:8001` |
-| `IG_FALLBACK_URL` | `http://127.0.0.1:8002` |
-| `IG_PRIMARY_PROTOCOL` | `mock` (`triton` in `compose.triton.yaml`) |
-| `IG_REQUEST_TIMEOUT_SECONDS` | `1` per backend attempt |
-| `IG_FAILURE_THRESHOLD` | `3` consecutive failures |
-| `IG_RECOVERY_TIMEOUT_SECONDS` | `10` |
-| `IG_DRAIN_FILE` | Unset locally; Kubernetes uses a pod-local file to signal graceful shutdown |
-
-## Layout
-
-```text
-src/inference_guard/
-  gateway.py          FastAPI routes and shared HTTP client lifecycle
-  backends.py         Ordered backend routing and response validation
-  adapters.py         Mock and Triton HTTP protocol translation
-  circuit_breaker.py  Closed/open/half-open state machine
-  draining.py         Retire HTTP connections during Kubernetes shutdown
-  config.py           Validated environment settings
-  metrics.py          Per-app Prometheus registry
-  schemas.py          Shared inference request/response contract
-  mock_backend.py     Deterministic workload and fault injection
-  cli.py              CLI entry point and reference demo commands
-  run_cli.py          External endpoint run command
-  suites.py           TOML suites, JSONL cases, and credential preflight
-  targets.py          Generic HTTP JSON adapter
-  validation.py       JSON Pointer assertions and numeric tolerances
-  runs.py             External workload execution and cancellation handling
-  results.py          Versioned external run reports
-  provenance.py       Workload fingerprints and declared deployment metadata
-  series.py           Repeated runs and incremental manifests
-  checks.py           Shared release assertions and recovery/overlap checks
-  evidence.py         Artifact integrity and execution-completeness validation
-  comparisons.py      Compatibility, variation, and regression verdicts
-  html_reports.py     Offline HTML views, timelines, and embedded JSON evidence
-  report_cli.py       Artifact rendering command
-  comparison_models.py  Comparison policies and report contract
-  compare_cli.py      Baseline/candidate comparison command
-  artifacts.py        Shared atomic JSON output
-  scenarios.py        Concurrent scenario lifecycle, cleanup, and recovery evidence
-  scenario_models.py  Scenario configuration and event contracts
-  proxy_scenarios.py   Named Toxiproxy outage/delay driver
-  kubernetes_scenarios.py  Scoped Deployment mutation and replacement checks
-  measurement.py      Shared concurrency scheduling and percentiles
-  benchmark.py        Reference gateway benchmark and scenario checks
-  faults.py           Toxiproxy fault injection and cleanup
-tests/                Routing, deadlines, recovery, validation and mock tests
-deploy/prometheus/    Optional scrape configuration
-deploy/kubernetes/    Local kind cluster and Kubernetes workloads
-docs/kubernetes.md    Deployment, failover verification, and cleanup
-docs/architecture.md  Design boundaries and next implementation steps
-```
-
-## Development
-
-```sh
-uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 uv run ty check
+uv run pytest
+uv run python scripts/smoke_external.py
+uv build
 ```
 
-CI runs these checks plus type checking, builds and starts the Compose services,
-and runs the smoke check. A separate benchmark job runs all four scenarios and
-uploads its JSON report. Both jobs clean up their containers. An independent
-external-endpoint job verifies passing, incorrect-output, and interrupted runs
-against the standalone HTTP server, checks repeated comparisons, and uploads
-the manifests, child reports, and comparison artifacts. Dependencies are
-locked in `uv.lock`. See [architecture notes](docs/architecture.md) for reliability semantics
-and the path to a real inference workload.
+The distribution, import package, and CLI are all named `bront`. A core wheel
+installation needs no FastAPI or Prometheus dependencies. Source-checkout dev
+requirements include the reference dependencies to test both workflows.
+No registry publication is required to install a locally built wheel.
 
-MIT licensed.
+The Dockerfile provides a `cli` build target for the tool alone and a default
+`reference` target for the fixture services:
+
+```sh
+docker build --target cli -t bront:cli .
+docker run --rm bront:cli
+```
+
+CI runs lint, types, tests, the reference Compose smoke check, reusable proxy
+scenarios, and the standalone run/compare/report workflow. It uploads JSON and
+HTML artifacts, including evidence retained after failed experiments. Generated
+reports belong under the ignored `reports/` directory rather than in Git.

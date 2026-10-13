@@ -4,14 +4,14 @@ import json
 import httpx
 import pytest
 
-from inference_guard.artifacts import write_artifact
-from inference_guard.comparison_models import ComparisonPolicy
-from inference_guard.comparisons import compare_files
-from inference_guard.evidence import ReadBudget, load_evidence, validate_run
-from inference_guard.provenance import digest
-from inference_guard.runs import run_suite
-from inference_guard.series import run_series
-from inference_guard.suites import SuiteError, load_suite
+from bront.artifacts import write_artifact
+from bront.comparison_models import ComparisonPolicy
+from bront.comparisons import compare_files
+from bront.evidence import ReadBudget, load_evidence, validate_run
+from bront.provenance import digest
+from bront.runs import run_suite
+from bront.series import run_series
+from bront.suites import SuiteError, load_suite
 
 
 @pytest.fixture
@@ -43,7 +43,7 @@ def install_runner(monkeypatch, handler):
     async def execute(loaded, output):
         return await run_suite(loaded, output, httpx.MockTransport(handler))
 
-    monkeypatch.setattr("inference_guard.series.run_suite", execute)
+    monkeypatch.setattr("bront.series.run_suite", execute)
 
 
 async def test_real_reports_are_consistent_and_series_can_be_compared(
@@ -170,7 +170,7 @@ async def test_p99_and_error_rate_are_explicit_release_checks(loaded, tmp_path):
 async def test_credentials_and_host_changes_do_not_change_contract(loaded, tmp_path):
     from pydantic import HttpUrl
 
-    from inference_guard.runs import make_report
+    from bront.runs import make_report
 
     loaded.suite.target.headers = {"Authorization": "secret-token-one"}
     first = make_report(loaded)

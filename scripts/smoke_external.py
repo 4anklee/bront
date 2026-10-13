@@ -18,7 +18,7 @@ def command(suite: Path, url: str, name: str) -> list[str]:
     return [
         sys.executable,
         "-m",
-        "inference_guard.cli",
+        "bront.cli",
         "run",
         str(suite),
         "--url",
@@ -67,7 +67,7 @@ environment = "smoke"
                 [
                     sys.executable,
                     "-m",
-                    "inference_guard.cli",
+                    "bront.cli",
                     "compare",
                     str(first),
                     str(second),
@@ -120,7 +120,7 @@ def verify_html_reports() -> None:
             [
                 sys.executable,
                 "-m",
-                "inference_guard.cli",
+                "bront.cli",
                 "report",
                 str(REPORTS / f"{name}.json"),
                 "--output",

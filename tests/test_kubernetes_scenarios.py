@@ -3,8 +3,8 @@ import copy
 
 import pytest
 
-from inference_guard.kubernetes_scenarios import OWNER, RESTART, KubernetesDriver
-from inference_guard.scenario_models import (
+from bront.kubernetes_scenarios import OWNER, RESTART, KubernetesDriver
+from bront.scenario_models import (
     KubernetesRestart,
     KubernetesScaleZero,
     ScenarioError,

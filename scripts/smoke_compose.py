@@ -61,7 +61,7 @@ def main(gateway: str = GATEWAY, primary: str = PRIMARY, fallback: str = FALLBAC
 
             metrics = client.get(f"{gateway}/metrics")
             metrics.raise_for_status()
-            if "inferenceguard_backend_attempts_total" not in metrics.text:
+            if "bront_backend_attempts_total" not in metrics.text:
                 raise RuntimeError("Backend attempt metrics are missing")
             print("PASS: Prometheus metrics endpoint", flush=True)
         finally:

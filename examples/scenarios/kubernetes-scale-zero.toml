@@ -1,7 +1,7 @@
 version = 1
 
 [target]
-url = "http://127.0.0.1:18080/api/v1/namespaces/inference-guard/services/gateway:8000/proxy/v1/infer"
+url = "http://127.0.0.1:18080/api/v1/namespaces/bront/services/gateway:8000/proxy/v1/infer"
 [target.backend]
 pointer = "/backend"
 
@@ -14,8 +14,8 @@ request_timeout_seconds = 5
 
 [scenario]
 kind = "kubernetes-scale-zero"
-context = "kind-inference-guard"
-namespace = "inference-guard"
+context = "kind-bront"
+namespace = "bront"
 deployment = "triton"
 expected_replicas = 1
 at_seconds = 3

@@ -1,3 +1,4 @@
+name: bront
 # Standalone alternative to compose.yaml: docker compose -f compose.triton.yaml up
 services:
     gateway:
@@ -5,7 +6,7 @@ services:
             file: compose.yaml
             service: gateway
         environment:
-            IG_PRIMARY_PROTOCOL: triton
+            BRONT_PRIMARY_PROTOCOL: triton
 
     primary:
         image: nvcr.io/nvidia/tritonserver:26.08-py3
@@ -16,7 +17,7 @@ services:
             - --disable-auto-complete-config
             - --allow-grpc=false
             - --allow-gpu-metrics=false
-        ports: ["127.0.0.1:${IG_PRIMARY_PORT:-8001}:8000"]
+        ports: ["127.0.0.1:${BRONT_PRIMARY_PORT:-8001}:8000"]
         volumes:
             - ./deploy/triton/models:/models:ro
         healthcheck:

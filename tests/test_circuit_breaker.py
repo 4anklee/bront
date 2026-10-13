@@ -1,4 +1,4 @@
-from inference_guard.circuit_breaker import CircuitBreaker
+from bront.reference.circuit_breaker import CircuitBreaker
 
 
 def test_threshold_cooldown_and_single_recovery_probe():

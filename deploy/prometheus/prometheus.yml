@@ -2,6 +2,6 @@ global:
     scrape_interval: 5s
 
 scrape_configs:
-    - job_name: inferenceguard
+    - job_name: bront
       static_configs:
           - targets: ["gateway:8000"]

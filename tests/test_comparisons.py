@@ -3,15 +3,15 @@ import json
 import pytest
 from typer.testing import CliRunner
 
-from inference_guard.artifacts import write_artifact
-from inference_guard.checks import evaluate_measurement
-from inference_guard.cli import app
-from inference_guard.comparison_models import ComparisonPolicy
-from inference_guard.comparisons import compare_files
-from inference_guard.provenance import digest
-from inference_guard.results import Attempt
-from inference_guard.runs import make_report
-from inference_guard.suites import Assertions, SuiteError, load_suite
+from bront.artifacts import write_artifact
+from bront.checks import evaluate_measurement
+from bront.cli import app
+from bront.comparison_models import ComparisonPolicy
+from bront.comparisons import compare_files
+from bront.provenance import digest
+from bront.results import Attempt
+from bront.runs import make_report
+from bront.suites import Assertions, SuiteError, load_suite
 
 
 @pytest.fixture

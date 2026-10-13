@@ -5,9 +5,9 @@ import httpx
 import pytest
 from typer.testing import CliRunner
 
-from inference_guard.cli import app
-from inference_guard.runs import run_suite
-from inference_guard.suites import SuiteError, load_suite
+from bront.cli import app
+from bront.runs import run_suite
+from bront.suites import SuiteError, load_suite
 
 
 @pytest.fixture
@@ -356,7 +356,7 @@ def test_cli_json_and_exit_codes(suite_path, monkeypatch, status, exit_code):
             httpx.MockTransport(lambda _: httpx.Response(status, json={"prediction": 3})),
         )
 
-    monkeypatch.setattr("inference_guard.run_cli.run_suite", execute)
+    monkeypatch.setattr("bront.run_cli.run_suite", execute)
     output = suite_path.parent / "r.json"
     result = CliRunner().invoke(app, ["run", str(suite_path), "--output", str(output), "--json"])
     assert result.exit_code == exit_code

@@ -7,8 +7,8 @@ from contextlib import asynccontextmanager
 import httpx
 import pytest
 
-from inference_guard.config import Settings
-from inference_guard.gateway import create_app
+from bront.reference.config import Settings
+from bront.reference.gateway import create_app
 
 PAYLOAD = {"model": "double", "inputs": [1, 2, 3]}
 RESULT = {"model": "double", "outputs": [2, 4, 6]}
@@ -43,7 +43,7 @@ async def test_primary_success_and_metrics():
         assert response.json() == {**RESULT, "backend": "primary"}
         assert calls == ["primary"]
         metrics = (await client.get("/metrics")).text
-        assert 'inferenceguard_requests_total{outcome="success"} 1.0' in metrics
+        assert 'bront_requests_total{outcome="success"} 1.0' in metrics
 
 
 @pytest.mark.parametrize("failure", ["http", "timeout", "connection", "json", "shape"])

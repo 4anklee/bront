@@ -14,11 +14,11 @@ spec:
         spec:
             containers:
                 - name: fallback
-                  image: inference-guard:local
+                  image: bront:local
                   imagePullPolicy: IfNotPresent
                   command:
                       - /app/.venv/bin/uvicorn
-                      - inference_guard.mock_backend:app
+                      - bront.reference.mock_backend:app
                       - --host
                       - 0.0.0.0
                       - --port

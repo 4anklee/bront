@@ -1,3 +1,4 @@
+name: bront
 x-service: &service
     build: .
     init: true
@@ -17,13 +18,13 @@ x-service: &service
 services:
     gateway:
         <<: *service
-        ports: ["127.0.0.1:${IG_GATEWAY_PORT:-8000}:8000"]
+        ports: ["127.0.0.1:${BRONT_GATEWAY_PORT:-8000}:8000"]
         environment:
-            IG_PRIMARY_URL: http://primary:8000
-            IG_FALLBACK_URL: http://fallback:8000
-            IG_REQUEST_TIMEOUT_SECONDS: "1"
-            IG_FAILURE_THRESHOLD: "3"
-            IG_RECOVERY_TIMEOUT_SECONDS: "10"
+            BRONT_PRIMARY_URL: http://primary:8000
+            BRONT_FALLBACK_URL: http://fallback:8000
+            BRONT_REQUEST_TIMEOUT_SECONDS: "1"
+            BRONT_FAILURE_THRESHOLD: "3"
+            BRONT_RECOVERY_TIMEOUT_SECONDS: "10"
         depends_on:
             primary:
                 condition: service_healthy
@@ -35,26 +36,26 @@ services:
         command:
             [
                 "/app/.venv/bin/uvicorn",
-                "inference_guard.mock_backend:app",
+                "bront.reference.mock_backend:app",
                 "--host",
                 "0.0.0.0",
                 "--port",
                 "8000",
             ]
-        ports: ["127.0.0.1:${IG_PRIMARY_PORT:-8001}:8000"]
+        ports: ["127.0.0.1:${BRONT_PRIMARY_PORT:-8001}:8000"]
 
     fallback:
         <<: *service
         command:
             [
                 "/app/.venv/bin/uvicorn",
-                "inference_guard.mock_backend:app",
+                "bront.reference.mock_backend:app",
                 "--host",
                 "0.0.0.0",
                 "--port",
                 "8000",
             ]
-        ports: ["127.0.0.1:${IG_FALLBACK_PORT:-8002}:8000"]
+        ports: ["127.0.0.1:${BRONT_FALLBACK_PORT:-8002}:8000"]
 
     prometheus:
         image: prom/prometheus:v3.2.1

@@ -1,5 +1,5 @@
-from inference_guard.circuit_breaker import CircuitBreaker
-from inference_guard.metrics import Metrics
+from bront.reference.circuit_breaker import CircuitBreaker
+from bront.reference.metrics import Metrics
 
 
 def test_circuit_metrics_include_failed_probes_but_ignore_stale_completions():
@@ -9,10 +9,10 @@ def test_circuit_metrics_include_failed_probes_but_ignore_stale_completions():
     value = metrics.registry.get_sample_value
 
     def state(name):
-        return value("inferenceguard_circuit_state", {"backend": "primary", "state": name})
+        return value("bront_circuit_state", {"backend": "primary", "state": name})
 
     assert state("closed") == 1
-    assert value("inferenceguard_circuit_last_recovery_seconds", {"backend": "primary"}) is None
+    assert value("bront_circuit_last_recovery_seconds", {"backend": "primary"}) is None
     ticket = breaker.acquire()
     assert ticket is not None
     breaker.fail(ticket)
@@ -29,13 +29,11 @@ def test_circuit_metrics_include_failed_probes_but_ignore_stale_completions():
     now[0] = 21
     breaker.succeed(probe)
     assert [state(s) for s in ("closed", "open", "half_open")] == [1, 0, 0]
-    assert value("inferenceguard_circuit_last_recovery_seconds", {"backend": "primary"}) == 21
-    assert (
-        value("inferenceguard_circuit_recovery_duration_seconds_count", {"backend": "primary"}) == 1
-    )
+    assert value("bront_circuit_last_recovery_seconds", {"backend": "primary"}) == 21
+    assert value("bront_circuit_recovery_duration_seconds_count", {"backend": "primary"}) == 1
     assert (
         value(
-            "inferenceguard_circuit_transitions_total",
+            "bront_circuit_transitions_total",
             {
                 "backend": "primary",
                 "from_state": "open",
@@ -53,7 +51,5 @@ def test_circuit_metrics_include_failed_probes_but_ignore_stale_completions():
     probe = breaker.acquire()
     assert probe is not None
     breaker.succeed(probe)
-    assert value("inferenceguard_circuit_last_recovery_seconds", {"backend": "primary"}) == 10
-    assert (
-        value("inferenceguard_circuit_recovery_duration_seconds_sum", {"backend": "primary"}) == 31
-    )
+    assert value("bront_circuit_last_recovery_seconds", {"backend": "primary"}) == 10
+    assert value("bront_circuit_recovery_duration_seconds_sum", {"backend": "primary"}) == 31

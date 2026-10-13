@@ -83,7 +83,7 @@ def main(gateway: str, context: str, namespace: str) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--gateway-url", default="http://127.0.0.1:28000")
-    parser.add_argument("--context", default="kind-inference-guard")
-    parser.add_argument("--namespace", default="inference-guard")
+    parser.add_argument("--context", default="kind-bront")
+    parser.add_argument("--namespace", default="bront")
     args = parser.parse_args()
     main(args.gateway_url, args.context, args.namespace)

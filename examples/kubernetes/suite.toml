@@ -1,0 +1,18 @@
+version = 1
+
+[target]
+url = "http://gateway:8000/v1/infer"
+[target.backend]
+pointer = "/backend"
+
+[workload]
+# Mounted alongside this suite by the optional in-cluster Job.
+cases = "cases.jsonl"
+requests = 1000
+concurrency = 20
+warmup_requests = 20
+request_timeout_seconds = 5
+
+[assertions]
+max_failed_requests = 0
+max_validation_failures = 0

@@ -16,7 +16,7 @@ def main() -> None:
     )
     model = helper.make_model(
         graph,
-        producer_name="inference-guard",
+        producer_name="bront",
         opset_imports=[helper.make_opsetid("", 13)],
         ir_version=8,
     )

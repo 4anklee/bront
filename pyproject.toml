@@ -3,29 +3,36 @@ requires = ["hatchling>=1.27,<2"]
 build-backend = "hatchling.build"
 
 [project]
-name = "inference-guard"
+name = "bront"
 version = "0.1.0"
 description = "Validate and measure inference endpoints, with a reference failover gateway"
 readme = "README.md"
 requires-python = ">=3.14"
 license = "MIT"
 dependencies = [
-  "fastapi>=0.115,<1",
   "httpx>=0.28,<1",
-  "prometheus-client>=0.21,<1",
-  "pydantic-settings>=2.7,<3",
-  "python-dotenv>=1,<2",
+  "pydantic>=2.10,<3",
   "rich>=14,<16",
   "typer>=0.20,<1",
+]
+
+[project.optional-dependencies]
+reference = [
+  "fastapi>=0.115,<1",
+  "prometheus-client>=0.21,<1",
+  "pydantic-settings>=2.7,<3",
   "uvicorn>=0.34,<1",
 ]
 
 [project.scripts]
-bront = "inference_guard.cli:app"
-inferenceguard = "inference_guard.cli:app"
+bront = "bront.cli:app"
 
 [dependency-groups]
 dev = [
+    "fastapi>=0.115,<1",
+    "prometheus-client>=0.21,<1",
+    "pydantic-settings>=2.7,<3",
+    "uvicorn>=0.34,<1",
     "onnx>=1.20,<2",
     "pytest>=8,<10",
     "pytest-asyncio>=0.25,<2",
@@ -34,7 +41,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/inference_guard"]
+packages = ["src/bront"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

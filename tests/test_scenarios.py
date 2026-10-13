@@ -4,10 +4,10 @@ import json
 import httpx
 import pytest
 
-from inference_guard.evidence import validate_run
-from inference_guard.html_reports import render_file
-from inference_guard.runs import run_suite
-from inference_guard.suites import SuiteError, load_suite
+from bront.evidence import validate_run
+from bront.html_reports import render_file
+from bront.runs import run_suite
+from bront.suites import SuiteError, load_suite
 
 
 @pytest.fixture
@@ -308,7 +308,7 @@ async def test_interrupt_during_final_cleanup_waits_for_restoration(path, monkey
 
 
 async def test_control_close_failure_still_saves_report(path, monkeypatch):
-    from inference_guard.scenarios import ScenarioSession
+    from bront.scenarios import ScenarioSession
 
     original = ScenarioSession.close
 

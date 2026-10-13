@@ -52,15 +52,15 @@ docker compose -f compose.triton.yaml ps
 This replaces the primary mock in the existing Compose project. Use the same
 Compose project name if you previously supplied `--project-name`.
 
-The file inherits your `IG_GATEWAY_PORT`, `IG_PRIMARY_PORT`, and `IG_FALLBACK_PORT`
+The file inherits your `BRONT_GATEWAY_PORT`, `BRONT_PRIMARY_PORT`, and `BRONT_FALLBACK_PORT`
 settings from `.env`. The examples below assume **18000, 18001, and 18002**,
-matching the earlier Docker walkthrough. Without those settings, the defaults
+when you select those ports in `.env`. Without those settings, the defaults
 are **8000, 8001, and 8002**.
 
 You do not need to change backend URLs in `.env`. Compose configures the gateway
-with `IG_PRIMARY_URL=http://primary:8000` and `IG_PRIMARY_PROTOCOL=triton`.
+with `BRONT_PRIMARY_URL=http://primary:8000` and `BRONT_PRIMARY_PROTOCOL=triton`.
 
-The 140-byte ONNX model is committed under
+The tiny ONNX model is committed under
 `deploy/triton/models/double/1/model.onnx`. To regenerate it:
 
 ```sh

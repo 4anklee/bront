@@ -1,0 +1,89 @@
+name: Publish to PyPI
+
+on:
+    release:
+        types: [published]
+
+permissions:
+    contents: read
+
+concurrency:
+    group: publish-${{ github.event.release.tag_name }}
+    cancel-in-progress: false
+
+jobs:
+    version:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  persist-credentials: false
+            - uses: astral-sh/setup-uv@v6
+              with:
+                  version: "0.11.21"
+            - name: Check release tag against package version
+              env:
+                  RELEASE_TAG: ${{ github.event.release.tag_name }}
+              run: |
+                  uv run --no-project --python 3.12 python - <<'PY'
+                  import os
+                  import tomllib
+                  from pathlib import Path
+
+                  project = tomllib.loads(Path("pyproject.toml").read_text())["project"]
+                  expected = f"v{project['version']}"
+                  actual = os.environ["RELEASE_TAG"]
+                  if actual != expected:
+                      raise SystemExit(f"Release tag {actual!r} must match {expected!r}")
+                  print(f"Releasing {project['name']} {project['version']}")
+                  PY
+            - run: uv lock --check
+
+    ci:
+        needs: version
+        uses: ./.github/workflows/ci.yml
+
+    build:
+        needs: ci
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  persist-credentials: false
+            - uses: astral-sh/setup-uv@v6
+              with:
+                  version: "0.11.21"
+            - run: uv build --no-sources
+            - name: Verify the release wheel
+              run: |
+                  uv venv --python 3.12 "$RUNNER_TEMP/bront-release"
+                  uv pip install --python "$RUNNER_TEMP/bront-release/bin/python" dist/bront-*.whl
+                  "$RUNNER_TEMP/bront-release/bin/python" scripts/smoke_external.py
+            - uses: actions/upload-artifact@v7
+              with:
+                  name: python-distributions
+                  path: dist/
+                  if-no-files-found: error
+                  retention-days: 30
+
+    publish:
+        needs: build
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        environment:
+            name: pypi
+            url: https://pypi.org/project/bront/
+        permissions:
+            id-token: write
+        steps:
+            - uses: actions/download-artifact@v8
+              with:
+                  name: python-distributions
+                  path: dist/
+            - uses: astral-sh/setup-uv@v6
+              with:
+                  version: "0.11.21"
+            - name: Publish verified distributions with Trusted Publishing
+              run: uv publish --trusted-publishing always dist/*

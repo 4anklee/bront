@@ -65,6 +65,7 @@ rendering succeeds; it does not replace a release gate.
 - [Repeated runs and release comparisons](docs/comparisons.md)
 - [Offline HTML reports](docs/reports.md)
 - [Architecture](docs/architecture.md)
+- [Publishing Bront to PyPI](docs/publishing.md)
 - [Roadmap and remaining validation](docs/proposals/inference-reliability.md)
 
 ## Optional reference deployment
